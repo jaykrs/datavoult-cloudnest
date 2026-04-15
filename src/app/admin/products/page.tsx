@@ -4,7 +4,7 @@ import AdminSidebar from '@/components/admin/AdminSidebar';
 import { Plus, Edit2, Trash2, Server, Package, Mail, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Save, X, Eye, Edit3, Bold, Italic, List, Link as LinkIcon, Code, AlignLeft, Heading1, Heading2 } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
-interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string | number>; }
+interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
 interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; plans: Plan[]; createdAt: string; }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={16} />, DOCKER: <Package size={16} />, EMAIL: <Mail size={16} /> };
@@ -101,6 +101,20 @@ export default function AdminProductsPage() {
   const [showPlanForm, setShowPlanForm] = useState<string | null>(null);
   const [planForm, setPlanForm] = useState({ name: '', price: '', billingCycle: 'MONTHLY', isPopular: false, description: '', limitsRaw: '{}' });
 
+  // ============================================
+  // DEVELOPER: @Simran Samir : UPDATE PLAN FEATURE - NEW STATE VARIABLES
+  // These states manage the plan editing functionality
+  // ============================================
+  const [editingPlan, setEditingPlan] = useState<{ productId: string; plan: Plan } | null>(null);
+  const [editPlanForm, setEditPlanForm] = useState({ 
+    name: '', 
+    price: '', 
+    billingCycle: 'MONTHLY', 
+    isPopular: false, 
+    description: '', 
+    limitsRaw: '{}' 
+  });
+
   const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}' });
 
   useEffect(() => {
@@ -185,6 +199,69 @@ export default function AdminProductsPage() {
         loadProducts();
       } else { const d = await res.json(); alert(d.error || 'Failed'); }
     } catch (err) { alert('Error creating plan'); }
+  }
+
+  // ============================================
+  // DEVELOPER: @Simran Samir: UPDATE PLAN FEATURE - HANDLE UPDATE PLAN FUNCTION
+  // This function makes a PUT request to update an existing plan
+  // ============================================
+  async function handleUpdatePlan(productId: string, planId: string) {
+    try {
+      let limits: Record<string, string | number> = {};
+      try { 
+        limits = JSON.parse(editPlanForm.limitsRaw); 
+      } catch { 
+        alert('Invalid JSON in limits'); 
+        return; 
+      }
+      
+      const res = await fetch(`/api/plans/${planId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: editPlanForm.name,
+          description: editPlanForm.description || undefined,
+          price: parseFloat(editPlanForm.price),
+          billingCycle: editPlanForm.billingCycle,
+          isPopular: editPlanForm.isPopular,
+          limits,
+        }),
+      });
+      
+      if (res.ok) {
+        setEditingPlan(null);
+        setEditPlanForm({ 
+          name: '', 
+          price: '', 
+          billingCycle: 'MONTHLY', 
+          isPopular: false, 
+          description: '', 
+          limitsRaw: '{}' 
+        });
+        loadProducts(); // Refresh the products list
+      } else { 
+        const d = await res.json(); 
+        alert(d.error || 'Failed to update plan'); 
+      }
+    } catch (err) { 
+      alert('Error updating plan'); 
+    }
+  }
+
+  // ============================================
+  // DEVELOPER: @Simran Samir: UPDATE PLAN FEATURE - START EDIT PLAN FUNCTION
+  // This function populates the edit form with existing plan data
+  // ============================================
+  function startEditPlan(productId: string, plan: Plan) {
+    setEditingPlan({ productId, plan });
+    setEditPlanForm({
+      name: plan.name,
+      price: plan.price.toString(),
+      billingCycle: plan.billingCycle,
+      isPopular: plan.isPopular,
+      description: plan.description || '',
+      limitsRaw: JSON.stringify(plan.limits, null, 2),
+    });
   }
 
   return (
@@ -383,6 +460,54 @@ export default function AdminProductsPage() {
                             </div>
                           )}
 
+                          {/* ============================================ */}
+                          {/* DEVELOPER: @Simran Samir: UPDATE PLAN FEATURE - EDIT PLAN FORM */}
+                          {/* This form appears when a plan is being edited */}
+                          {/* ============================================ */}
+                          {editingPlan && editingPlan.productId === product.id && (
+                            <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(59,130,246,0.25)', borderRadius: 'var(--radius-md)', padding: 16, marginBottom: 16, marginTop: 16 }}>
+                              <h4 style={{ fontWeight: 600, fontSize: 13, marginBottom: 14, color: 'var(--accent-bright)' }}>
+                                Edit Plan: {editingPlan.plan.name}
+                              </h4>
+                              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
+                                <div>
+                                  <label className="label">Plan Name</label>
+                                  <input className="input" value={editPlanForm.name} onChange={e => setEditPlanForm(f => ({ ...f, name: e.target.value }))} placeholder="Professional" required style={{ fontSize: 13 }} />
+                                </div>
+                                <div>
+                                  <label className="label">Price (USD/mo)</label>
+                                  <input className="input" type="number" step="0.01" min="0" value={editPlanForm.price} onChange={e => setEditPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="19.99" required style={{ fontSize: 13 }} />
+                                </div>
+                                <div>
+                                  <label className="label">Billing Cycle</label>
+                                  <select className="input" value={editPlanForm.billingCycle} onChange={e => setEditPlanForm(f => ({ ...f, billingCycle: e.target.value }))} style={{ cursor: 'pointer', fontSize: 13 }}>
+                                    <option value="MONTHLY">Monthly</option>
+                                    <option value="QUARTERLY">Quarterly</option>
+                                    <option value="ANNUAL">Annual</option>
+                                  </select>
+                                </div>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                  <label className="label">Description (optional)</label>
+                                  <input className="input" value={editPlanForm.description} onChange={e => setEditPlanForm(f => ({ ...f, description: e.target.value }))} placeholder="Best for growing teams" style={{ fontSize: 13 }} />
+                                </div>
+                                <div style={{ gridColumn: '1 / -1' }}>
+                                  <label className="label">Limits (JSON)</label>
+                                  <input className="input" value={editPlanForm.limitsRaw} onChange={e => setEditPlanForm(f => ({ ...f, limitsRaw: e.target.value }))} placeholder='{"cpu":"2 vCPUs","ram":"4 GB","storage":"80 GB"}' style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+                                </div>
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                  <input type="checkbox" id={`edit-popular-${product.id}`} checked={editPlanForm.isPopular} onChange={e => setEditPlanForm(f => ({ ...f, isPopular: e.target.checked }))} style={{ cursor: 'pointer' }} />
+                                  <label htmlFor={`edit-popular-${product.id}`} style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Mark as Popular</label>
+                                </div>
+                                <div style={{ gridColumn: '2 / -1', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                                  <button type="button" onClick={() => handleUpdatePlan(product.id, editingPlan.plan.id)} className="btn btn-primary btn-sm">
+                                    <Save size={13} /> Update Plan
+                                  </button>
+                                  <button type="button" onClick={() => setEditingPlan(null)} className="btn btn-secondary btn-sm">Cancel</button>
+                                </div>
+                              </div>
+                            </div>
+                          )}
+
                           {product.plans.length === 0 ? (
                             <div style={{ padding: '20px', textAlign: 'center', color: 'var(--text-muted)', fontSize: 13, border: '1px dashed var(--border)', borderRadius: 8 }}>
                               No plans yet — add one above to make this product subscribable.
@@ -390,7 +515,32 @@ export default function AdminProductsPage() {
                           ) : (
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                               {product.plans.map(plan => (
-                                <div key={plan.id} style={{ background: 'var(--bg-card)', border: `1px solid ${plan.isPopular ? 'rgba(59,130,246,0.3)' : 'var(--border)'}`, borderRadius: 10, padding: 14 }}>
+                                <div key={plan.id} style={{ background: 'var(--bg-card)', border: `1px solid ${plan.isPopular ? 'rgba(59,130,246,0.3)' : 'var(--border)'}`, borderRadius: 10, padding: 14, position: 'relative' }}>
+                                  {/* ============================================ */}
+                                  {/* DEVELOPER COMMENT: UPDATE PLAN FEATURE - EDIT BUTTON */}
+                                  {/* Edit button added to each plan card */}
+                                  {/* ============================================ */}
+                                  <button
+                                    onClick={() => startEditPlan(product.id, plan)}
+                                    style={{
+                                      position: 'absolute',
+                                      top: 8,
+                                      right: 8,
+                                      background: 'none',
+                                      border: 'none',
+                                      cursor: 'pointer',
+                                      color: 'var(--text-muted)',
+                                      padding: 4,
+                                      borderRadius: 4,
+                                      transition: 'color 0.1s',
+                                    }}
+                                    onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
+                                    onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
+                                    title="Edit plan"
+                                  >
+                                    <Edit2 size={14} />
+                                  </button>
+                                  
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                     <div>
                                       <div style={{ fontWeight: 600, fontSize: 13 }}>{plan.name}</div>
