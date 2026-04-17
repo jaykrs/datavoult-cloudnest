@@ -201,6 +201,11 @@ export default function AdminProductsPage() {
     } catch (err) { alert('Error creating plan'); }
   }
 
+  async function handlePlanDelete(id : string){
+ if (!confirm('Delete this plan? This cannot be undone.')) return;
+    await fetch(`/api/plans/${id}`, { method: 'DELETE' });
+    setProducts(prev => prev.filter(p => p.id !== id));
+	}
   // ============================================
   // DEVELOPER: @Simran Samir: UPDATE PLAN FEATURE - HANDLE UPDATE PLAN FUNCTION
   // This function makes a PUT request to update an existing plan
@@ -516,37 +521,38 @@ export default function AdminProductsPage() {
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: 10 }}>
                               {product.plans.map(plan => (
                                 <div key={plan.id} style={{ background: 'var(--bg-card)', border: `1px solid ${plan.isPopular ? 'rgba(59,130,246,0.3)' : 'var(--border)'}`, borderRadius: 10, padding: 14, position: 'relative' }}>
-                                  {/* ============================================ */}
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                                    <div>
+                                      <div style={{ fontWeight: 600, fontSize: 13 }}>{plan.name}</div>
+                                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{plan.billingCycle}</div>
+                                    </div>
+                                    {plan.isPopular && <span style={{ fontSize: 10, background: 'var(--accent)', color: 'white', padding: '1px 4px', borderRadius: 100, fontWeight: 600 }}>Popular</span>}
+                                   {/* ============================================ */}
                                   {/* DEVELOPER COMMENT: UPDATE PLAN FEATURE - EDIT BUTTON */}
                                   {/* Edit button added to each plan card */}
                                   {/* ============================================ */}
                                   <button
                                     onClick={() => startEditPlan(product.id, plan)}
                                     style={{
-                                      position: 'absolute',
-                                      top: 8,
-                                      right: 8,
+                                      position: 'relative',
+                                      top: 1,
+                                      right: 1,
                                       background: 'none',
                                       border: 'none',
                                       cursor: 'pointer',
                                       color: 'var(--text-muted)',
-                                      padding: 4,
-                                      borderRadius: 4,
+                                      padding: 1,
+                                      borderRadius: 1,
                                       transition: 'color 0.1s',
                                     }}
                                     onMouseEnter={(e) => (e.currentTarget.style.color = 'var(--text-primary)')}
                                     onMouseLeave={(e) => (e.currentTarget.style.color = 'var(--text-muted)')}
                                     title="Edit plan"
                                   >
-                                    <Edit2 size={14} />
+                                    <Edit2 size={10} />
                                   </button>
                                   
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                                    <div>
-                                      <div style={{ fontWeight: 600, fontSize: 13 }}>{plan.name}</div>
-                                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{plan.billingCycle}</div>
-                                    </div>
-                                    {plan.isPopular && <span style={{ fontSize: 10, background: 'var(--accent)', color: 'white', padding: '1px 7px', marginRight: '23px', borderRadius: 100, fontWeight: 600 }}>Popular</span>}
+
                                   </div>
                                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>${Number(plan.price).toFixed(2)}</div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -557,6 +563,9 @@ export default function AdminProductsPage() {
                                       </div>
                                     ))}
                                   </div>
+                                  <button className="icon-btn danger" onClick={() => handlePlanDelete(plan.id)} title="Delete plan">
+                                    <Trash2 size={12} />
+                                  </button>
                                 </div>
                               ))}
                             </div>

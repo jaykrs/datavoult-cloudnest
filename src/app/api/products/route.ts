@@ -16,16 +16,22 @@ export async function GET(req: NextRequest) {
       ...(status !== 'all' && { status: status as 'ACTIVE' | 'INACTIVE' | 'COMING_SOON' }),
     };
 
-    const [products, total] = await Promise.all([
-      prisma.product.findMany({
-        where,
-        include: { plans: true },
-        skip,
-        take: limit,
-        orderBy: { createdAt: 'desc' },
-      }),
-      prisma.product.count({ where }),
-    ]);
+  const [products, total] = await Promise.all([
+  prisma.product.findMany({
+    where,
+    include: {
+      plans: {
+        where: {
+          isDeleted: false, // This ensures only active plans are returned
+        },
+      },
+    },
+    skip,
+    take: limit,
+    orderBy: { createdAt: 'desc' },
+  }),
+  prisma.product.count({ where }),
+]);
 
     return apiSuccess({ products, meta: buildPaginationMeta(total, page, limit) });
   } catch {
