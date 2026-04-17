@@ -546,7 +546,7 @@ export default function AdminProductsPage() {
                                       <div style={{ fontWeight: 600, fontSize: 13 }}>{plan.name}</div>
                                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{plan.billingCycle}</div>
                                     </div>
-                                    {plan.isPopular && <span style={{ fontSize: 10, background: 'var(--accent)', color: 'white', padding: '1px 7px', borderRadius: 100, fontWeight: 600 }}>Popular</span>}
+                                    {plan.isPopular && <span style={{ fontSize: 10, background: 'var(--accent)', color: 'white', padding: '1px 7px', marginRight: '23px', borderRadius: 100, fontWeight: 600 }}>Popular</span>}
                                   </div>
                                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>${Number(plan.price).toFixed(2)}</div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
