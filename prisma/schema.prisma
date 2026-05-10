@@ -123,7 +123,7 @@ model Payment {
   userId         String
   subscriptionId String?
   amount         Decimal       @db.Decimal(10, 2)
-  currency       String        @default("USD")
+  currency       String        @default("INR")
   status         PaymentStatus @default(PENDING)
   method         PaymentMethod @default(CARD)
   gatewayId      String?

@@ -8,7 +8,7 @@ export async function GET() {
   try {
     const session = await requireAuth();
     const user = await prisma.user.findUnique({
-      where: { id: session.userId },
+      where: { id: session.userId as string},
       select: { id: true, email: true, name: true, role: true, avatarUrl: true, isVerified: true, createdAt: true },
     });
     if (!user) return apiError('User not found', 404);
@@ -29,7 +29,7 @@ export async function PATCH(req: NextRequest) {
     if (name) updateData.name = name;
 
     if (newPassword) {
-      const user = await prisma.user.findUnique({ where: { id: session.userId } });
+      const user = await prisma.user.findUnique({ where: { id: session.userId as string} });
       if (!user) return apiError('User not found', 404);
       const valid = await bcrypt.compare(currentPassword, user.passwordHash);
       if (!valid) return apiError('Current password is incorrect', 400);
@@ -37,7 +37,7 @@ export async function PATCH(req: NextRequest) {
     }
 
     const user = await prisma.user.update({
-      where: { id: session.userId },
+      where: { id: session.userId as string},
       data: updateData,
       select: { id: true, email: true, name: true, role: true, avatarUrl: true, createdAt: true },
     });

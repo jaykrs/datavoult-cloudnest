@@ -221,11 +221,11 @@ function CheckoutForm() {
                     <div>
                       <label className="label">Country</label>
                       <select className="input checkout-input" style={{ cursor: 'pointer' }}>
-                        <option>United States</option>
+                        <option>India</option>
                         <option>United Kingdom</option>
                         <option>Germany</option>
                         <option>France</option>
-                        <option>India</option>
+                        <option>United States</option>
                         <option>Australia</option>
                         <option>Canada</option>
                         <option>Other</option>
@@ -243,7 +243,7 @@ function CheckoutForm() {
                   {processing ? (
                     <><span className="spinner" style={{ width: 18, height: 18 }} /> Processing payment...</>
                   ) : (
-                    <><Lock size={16} /> Pay ${Number(total).toFixed(2)} · Start service</>
+                    <><Lock size={16} /> Pay ₹{Number(total).toFixed(2)} · Start service</>
                   )}
                 </button>
 
@@ -297,17 +297,17 @@ function CheckoutForm() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                       <span style={{ color: 'var(--text-secondary)' }}>{plan.name} plan</span>
-                      <span>${Number(plan.price).toFixed(2)}</span>
+                      <span>₹{Number(plan.price).toFixed(2)}</span>
                     </div>
                     {annualSave && (
                       <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--green)' }}>
                         <span>Annual discount (20% off)</span>
-                        <span>–${(Number(annualSave) * 12 * 0.25).toFixed(2)}</span>
+                        <span>–₹{(Number(annualSave) * 12 * 0.25).toFixed(2)}</span>
                       </div>
                     )}
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
                       <span>Tax</span>
-                      <span>${tax}</span>
+                      <span>₹{tax}</span>
                     </div>
                   </div>
                 </div>
@@ -316,8 +316,8 @@ function CheckoutForm() {
                 <div style={{ padding: '16px 24px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
                   <span style={{ fontWeight: 600, fontSize: 15 }}>Total today</span>
                   <div style={{ textAlign: 'right' }}>
-                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color }}>${total.toFixed(2)}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>then ${total.toFixed(2)} / {plan.billingCycle.toLowerCase()}</div>
+                    <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color }}>₹{total.toFixed(2)}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>then ₹{total.toFixed(2)} / {plan.billingCycle.toLowerCase()}</div>
                   </div>
                 </div>
 
@@ -345,7 +345,7 @@ function CheckoutForm() {
                       <Link key={p.id} href={`/checkout?plan=${p.id}&product=${productId}`}
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 'var(--radius-md)', background: p.id === plan.id ? 'var(--bg-hover)' : 'var(--bg-card)', border: `1px solid ${p.id === plan.id ? 'var(--accent)44' : 'var(--border)'}`, fontSize: 13, color: p.id === plan.id ? 'var(--text-primary)' : 'var(--text-secondary)', textDecoration: 'none', transition: 'all 0.15s' }}>
                         <span>{p.name}</span>
-                        <span style={{ fontWeight: 600, color: p.id === plan.id ? color : undefined }}>${p.price}/mo</span>
+                        <span style={{ fontWeight: 600, color: p.id === plan.id ? color : undefined }}>₹{p.price}/mo</span>
                       </Link>
                     ))}
                   </div>

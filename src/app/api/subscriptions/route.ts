@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
   try {
     const session = await requireAuth();
     const { page, limit, skip } = getPaginationParams(req);
-    const where = { userId: session.userId };
+    const where = { userId: session.userId as string};
     const [subscriptions, total] = await Promise.all([
       prisma.subscription.findMany({
         where,
@@ -46,7 +46,7 @@ export async function POST(req: NextRequest) {
 
     // Check existing active subscription for this product
     const existing = await prisma.subscription.findFirst({
-      where: { userId: session.userId, productId, status: { in: ['ACTIVE', 'TRIAL'] } },
+      where: { userId: session.userId as string, productId, status: { in: ['ACTIVE', 'TRIAL'] } },
     });
     if (existing) return apiError('You already have an active subscription to this product', 409);
 
@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
 
     const subscription = await prisma.subscription.create({
       data: {
-        userId: session.userId,
+        userId: session.userId as string,
         productId,
         planId,
         renewsAt,
@@ -91,7 +91,7 @@ export async function POST(req: NextRequest) {
     // Record payment
     await prisma.payment.create({
       data: {
-        userId: session.userId,
+        userId: session.userId as string,
         subscriptionId: subscription.id,
         amount: plan.price,
         status: 'COMPLETED',

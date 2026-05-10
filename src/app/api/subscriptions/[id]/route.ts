@@ -9,7 +9,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const session = await requireAuth();
     const subscription = await prisma.subscription.findFirst({
-      where: { id: params.id, userId: session.userId },
+      where: { id: params.id, userId: session.userId as string},
       include: { product: true, plan: true, serviceConfig: true, payments: { orderBy: { createdAt: 'desc' } } },
     });
     if (!subscription) return apiError('Subscription not found', 404);
@@ -26,7 +26,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     const body = await req.json();
 
     const subscription = await prisma.subscription.findFirst({
-      where: { id: params.id, userId: session.userId },
+      where: { id: params.id, userId: session.userId as string},
     });
     if (!subscription) return apiError('Subscription not found', 404);
 
@@ -47,7 +47,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     const session = await requireAuth();
     const subscription = await prisma.subscription.findFirst({
-      where: { id: params.id, userId: session.userId },
+      where: { id: params.id, userId: session.userId as string},
     });
     if (!subscription) return apiError('Subscription not found', 404);
 

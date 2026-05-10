@@ -1,4 +1,4 @@
-import { SignJWT, jwtVerify } from 'jose';
+import { SignJWT, jwtVerify, JWTPayload  } from 'jose';
 import { cookies } from 'next/headers';
 import { prisma } from './prisma';
 
@@ -6,13 +6,13 @@ const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'fallback-secret-change-in-production-32chars'
 );
 
-export interface JWTPayload {
+ interface CustomPayload extends JWTPayload {
   userId: string;
   email: string;
   role: string;
 }
 
-export async function signToken(payload: JWTPayload): Promise<string> {
+export async function signToken(payload: CustomPayload): Promise<string> {
   return await new SignJWT(payload)
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()

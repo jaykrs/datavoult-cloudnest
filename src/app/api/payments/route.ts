@@ -8,7 +8,7 @@ export async function GET(req: NextRequest) {
     const session = await requireAuth();
     const { page, limit, skip } = getPaginationParams(req);
 
-    const where = { userId: session.userId };
+    const where = { userId: session.userId as string };
 
     const [payments, total] = await Promise.all([
       prisma.payment.findMany({
