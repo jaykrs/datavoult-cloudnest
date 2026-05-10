@@ -299,12 +299,12 @@ export default function ProductDetailPage() {
                           <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{plan.name}</h3>
                           {plan.description && <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>{plan.description}</p>}
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 8 }}>
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 36 }}>${plan.price}</span>
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 36 }}>₹{plan.price}</span>
                             <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>/{plan.billingCycle.toLowerCase()}</span>
                           </div>
                           {plan.billingCycle === 'ANNUAL' && (
                             <div style={{ fontSize: 12, color: 'var(--green)', marginTop: 4 }}>
-                              Billed annually · save ${(plan.price * 0.2 * 12 / 12).toFixed(2)}/mo vs monthly
+                              Billed annually · save ₹{(plan.price * 0.2 * 12 / 12).toFixed(2)}/mo vs monthly
                             </div>
                           )}
                         </div>

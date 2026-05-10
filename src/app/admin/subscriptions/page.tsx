@@ -118,7 +118,7 @@ export default function AdminSubscriptionsPage() {
                     </td>
                     <td>
                       <div style={{ fontWeight: 500, fontSize: 13 }}>{sub.plan.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>${sub.plan.price}/mo · {sub.plan.billingCycle}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>₹{sub.plan.price}/mo · {sub.plan.billingCycle}</div>
                     </td>
                     <td><span className={`badge badge-${statusBadge[sub.status] || 'pending'}`}>{sub.status}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(sub.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>

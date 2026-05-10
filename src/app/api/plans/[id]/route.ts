@@ -34,7 +34,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 export async function DELETE(_req: NextRequest, { params }: Params) {
   try {
     await requireAdmin();
-    await prisma.plan.delete({ where: { id: params.id } });
+    await prisma.plan.update({ where: { id: params.id }, data : { isDeleted : true} });
     return apiSuccess({ deleted: true });
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);

@@ -363,7 +363,7 @@ export default function AdminProductsPage() {
                         {product.plans.length} plan{product.plans.length !== 1 ? 's' : ''}
                         {product.plans.length > 0 && (
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                            from ${Math.min(...product.plans.map(p => Number(p.price))).toFixed(2)}/mo
+                            from ₹{Math.min(...product.plans.map(p => Number(p.price))).toFixed(2)}/mo
                           </div>
                         )}
                       </div>
@@ -554,7 +554,7 @@ export default function AdminProductsPage() {
                                   
 
                                   </div>
-                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>${Number(plan.price).toFixed(2)}</div>
+                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>₹{Number(plan.price).toFixed(2)}</div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                     {Object.entries(plan.limits).slice(0, 4).map(([k, v]) => (
                                       <div key={k} style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>

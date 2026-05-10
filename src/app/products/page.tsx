@@ -100,7 +100,7 @@ export default function ProductsPage() {
                             )}
                             <div style={{ fontWeight: 600, marginBottom: 4 }}>{plan.name}</div>
                             <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 12 }}>
-                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 28 }}>${plan.price}</span>
+                              <span style={{ fontFamily: 'var(--font-display)', fontSize: 28 }}>₹{plan.price}</span>
                               <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/mo</span>
                             </div>
                             <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>

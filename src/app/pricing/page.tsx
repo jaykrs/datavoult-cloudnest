@@ -81,12 +81,12 @@ export default function PricingPage() {
                               )}
                               <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>{plan.name}</h3>
                               <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 40 }}>${displayPrice.toFixed(2)}</span>
+                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 40 }}>₹{displayPrice.toFixed(2)}</span>
                                 <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>/mo</span>
                               </div>
                               {billing === 'ANNUAL' && (
                                 <div style={{ fontSize: 12, color: 'var(--green)', marginBottom: 16 }}>
-                                  Save ${((plan.price - displayPrice) * 12).toFixed(2)}/yr
+                                  Save ₹{((plan.price - displayPrice) * 12).toFixed(2)}/yr
                                 </div>
                               )}
                               <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />

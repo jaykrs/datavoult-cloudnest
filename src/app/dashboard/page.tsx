@@ -71,7 +71,7 @@ export default function DashboardPage() {
           ) : (
             <div className="stats-grid">
               <StatCard icon={<Server size={18} />} label="Active Services" value={activeCount} sub={`${subscriptions.length} total`} color="var(--accent)" />
-              <StatCard icon={<CreditCard size={18} />} label="Total Spend" value={`$${totalSpend.toFixed(2)}`} sub="All time" color="var(--green)" />
+              <StatCard icon={<CreditCard size={18} />} label="Total Spend" value={`₹${totalSpend.toFixed(2)}`} sub="All time" color="var(--green)" />
               <StatCard icon={<Activity size={18} />} label="Uptime" value="99.98%" sub="Last 30 days" color="var(--purple)" />
             </div>
           )}

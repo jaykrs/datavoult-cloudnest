@@ -19,7 +19,7 @@ const CustomTooltip = ({ active, payload, label }: { active?: boolean; payload?:
   return (
     <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
       <p style={{ color: 'var(--text-muted)', marginBottom: 4 }}>{label}</p>
-      <p style={{ color: 'var(--accent-bright)', fontWeight: 600 }}>${payload[0].value?.toFixed(2)}</p>
+      <p style={{ color: 'var(--accent-bright)', fontWeight: 600 }}>₹{payload[0].value?.toFixed(2)}</p>
     </div>
   );
 };
@@ -37,7 +37,7 @@ export default function AdminDashboard() {
 
   const statCards = stats ? [
     { icon: <Users size={18} />,     label: 'Total Users',          value: stats.totalUsers,                      change: '+12% this month', color: 'var(--accent)'  },
-    { icon: <TrendingUp size={18}/>, label: 'Total Revenue',         value: `$${stats.totalRevenue.toFixed(2)}`,   change: '+8% vs last month',color: 'var(--green)'  },
+    { icon: <TrendingUp size={18}/>, label: 'Total Revenue',         value: `₹${stats.totalRevenue.toFixed(2)}`,   change: '+8% vs last month',color: 'var(--green)'  },
     { icon: <Server size={18} />,    label: 'Active Subscriptions',  value: stats.activeSubscriptions,             change: null,               color: 'var(--purple)' },
     { icon: <CreditCard size={18}/>, label: 'Products',              value: stats.totalProducts,                   change: null,               color: 'var(--amber)'  },
   ] : [];
@@ -87,7 +87,7 @@ export default function AdminDashboard() {
                       <BarChart data={stats.revenueByMonth} barSize={28}>
                         <CartesianGrid strokeDasharray="3 3" stroke="var(--border-subtle)" vertical={false} />
                         <XAxis dataKey="month" tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} />
-                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `$${v}`} />
+                        <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 11 }} axisLine={false} tickLine={false} tickFormatter={v => `₹${v}`} />
                         <Tooltip content={<CustomTooltip />} cursor={{ fill: 'rgba(59,130,246,0.05)' }} />
                         <Bar dataKey="revenue" fill="var(--accent)" radius={[4, 4, 0, 0]} />
                       </BarChart>
@@ -106,7 +106,7 @@ export default function AdminDashboard() {
                           <Pie data={stats.subscriptionsByCategory} cx="50%" cy="50%" innerRadius={50} outerRadius={76} dataKey="count" paddingAngle={4}>
                             {stats.subscriptionsByCategory.map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                           </Pie>
-                          <Tooltip formatter={(v) => [v, 'subscriptions']} contentStyle={{ background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
+                          <Tooltip formatter={(v) => [v, 'subscriptions']} contentStyle={{ color: 'var(--text-secondary)', background: 'var(--bg-elevated)', border: '1px solid var(--border)', borderRadius: 8, fontSize: 12 }} />
                         </PieChart>
                       </ResponsiveContainer>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginTop: 16 }}>
@@ -145,7 +145,7 @@ export default function AdminDashboard() {
                             <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.user.email}</div>
                           </td>
                           <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{p.subscription?.product.name || '—'}</td>
-                          <td style={{ fontSize: 14, fontWeight: 600 }}>${Number(p.amount).toFixed(2)}</td>
+                          <td style={{ fontSize: 14, fontWeight: 600 }}>₹{Number(p.amount).toFixed(2)}</td>
                           <td><span className={`badge badge-${p.status === 'COMPLETED' ? 'active' : 'pending'}`}>{p.status}</span></td>
                           <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>
                         </tr>
