@@ -19,11 +19,12 @@
     "jose": "^5.9.6",
     "lucide-react": "^0.454.0",
     "next": "14.2.16",
+    "razorpay": "^2.9.6",
     "react": "^18",
     "react-dom": "^18",
     "recharts": "^2.13.3",
+    "ssh2": "^1.17.0",
     "stripe": "^17.3.1",
-    "razorpay": "^2.9.6",
     "zod": "^3.23.8"
   },
   "devDependencies": {
@@ -31,6 +32,7 @@
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "@types/ssh2": "^1.15.5",
     "eslint": "^8",
     "eslint-config-next": "14.2.16",
     "prisma": "^5.22.0",
