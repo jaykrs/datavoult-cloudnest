@@ -20,11 +20,7 @@ export async function GET(req: NextRequest) {
   prisma.product.findMany({
     where,
     include: {
-      plans: {
-        where: {
-          isDeleted: false, // This ensures only active plans are returned
-        },
-      },
+      plans: true,
     },
     skip,
     take: limit,

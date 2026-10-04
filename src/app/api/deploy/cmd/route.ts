@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
             const conn = new Client();
 
             conn.on('ready', () => {
-                const command = `sudo yum install -y ${packageName}`;
+                const command = `sudo apt-get update -y && sudo apt-get install -y ${packageName}`;
 
                 conn.exec(command, (err, stream) => {
                     if (err) {

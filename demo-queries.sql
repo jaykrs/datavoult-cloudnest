@@ -3,14 +3,14 @@
 -- ============================================================
 
 -- ── 1. Row counts across all tables ──────────────────────────
-SELECT 'users'           AS tbl, COUNT(*) AS rows FROM users
-UNION ALL SELECT 'products',         COUNT(*) FROM products
-UNION ALL SELECT 'plans',            COUNT(*) FROM plans
-UNION ALL SELECT 'subscriptions',    COUNT(*) FROM subscriptions
-UNION ALL SELECT 'service_configs',  COUNT(*) FROM service_configs
-UNION ALL SELECT 'payments',         COUNT(*) FROM payments
-UNION ALL SELECT 'support_tickets',  COUNT(*) FROM support_tickets
-UNION ALL SELECT 'ticket_replies',   COUNT(*) FROM ticket_replies;
+SELECT 'users' AS tbl, COUNT(*) AS `rows` FROM users
+UNION ALL SELECT 'products', COUNT(*) FROM products
+UNION ALL SELECT 'plans', COUNT(*) FROM plans
+UNION ALL SELECT 'subscriptions', COUNT(*) FROM subscriptions
+UNION ALL SELECT 'service_configs', COUNT(*) FROM service_configs
+UNION ALL SELECT 'payments', COUNT(*) FROM payments
+UNION ALL SELECT 'support_tickets', COUNT(*) FROM support_tickets
+UNION ALL SELECT 'ticket_replies', COUNT(*) FROM ticket_replies;
 
 -- ── 2. All users with subscription and payment counts ─────────
 SELECT

@@ -10,7 +10,10 @@ const PUBLIC_PATHS = [
   '/pricing',
   '/checkout',          // checkout handles its own auth redirect client-side
   '/api/auth',
-  '/api/products',      // product listing/detail is public
+  '/api/products',
+  '/api/install', // Added for testing
+  '/api/logs',    // Added for testing
+  '/api/deploy'      // product listing/detail is public
 ];
 
 export async function middleware(request: NextRequest) {

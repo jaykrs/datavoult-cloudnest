@@ -6,8 +6,8 @@ const prisma = new PrismaClient();
 async function main() {
   console.log('🌱 Seeding database...');
 
-  // Create admin user
-  const adminHash = await bcrypt.hash('admin123456', 12);
+  // Create admin user (matching demo credentials)
+  const adminHash = await bcrypt.hash('Password123!', 12);
   const admin = await prisma.user.upsert({
     where: { email: 'admin@cloudnest.io' },
     update: {},
@@ -20,13 +20,13 @@ async function main() {
     },
   });
 
-  // Create test user
-  const userHash = await bcrypt.hash('user123456', 12);
+  // Create test user (matching demo credentials)
+  const userHash = await bcrypt.hash('Password123!', 12);
   const user = await prisma.user.upsert({
-    where: { email: 'john@example.com' },
+    where: { email: 'john.doe@example.com' },
     update: {},
     create: {
-      email: 'john@example.com',
+      email: 'john.doe@example.com',
       name: 'John Doe',
       passwordHash: userHash,
       role: 'USER',
