@@ -126,6 +126,7 @@ console.log(pgorderdata);
             });
             // Add onPaymentSuccessfull function here
             alert("Payment successful!");
+            setLoading(false);
           } catch (err) {
             // Add onPaymentUnSuccessfull function here
             alert("Payment failed: " + err);
