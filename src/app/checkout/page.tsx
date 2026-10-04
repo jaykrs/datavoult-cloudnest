@@ -3,7 +3,6 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Cloud, CreditCard, Lock, Check, ArrowLeft, Shield, Server, Package, Mail, ChevronDown, ChevronUp } from 'lucide-react';
-import { useRazorpay } from 'react-razorpay';
 
 interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string>; }
 interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; plans: Plan[]; }
@@ -24,7 +23,7 @@ function CheckoutForm() {
   const router = useRouter();
   const planId = searchParams.get('plan') || '';
   const productId = searchParams.get('product') || '';
-  const {Razorpay} = useRazorpay();
+
   const [product, setProduct] = useState<Product | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
@@ -35,7 +34,7 @@ function CheckoutForm() {
   const [cardNumber, setCardNumber] = useState('');
   const [expiry, setExpiry] = useState('');
   const [cvv, setCvv] = useState('');
-  const [payMethod, setPayMethod] = useState<'PAYMENT GATEWAY' |  'BANK TRANSFER' | 'CARD' |'WALLET'>('PAYMENT GATEWAY');
+  const [payMethod, setPayMethod] = useState<'CARD' | 'PAYPAL' | 'CRYPTO'>('CARD');
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [showSummary, setShowSummary] = useState(false);
@@ -73,85 +72,14 @@ function CheckoutForm() {
 
     setProcessing(true);
     try {
-      // const res = await fetch('/api/subscriptions', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //   body: JSON.stringify({ productId: product.id, planId: plan.id, paymentMethod: payMethod }),
-      // });
-      // const data = await res.json();
-      // if(res.ok) {
-        const pgorder = await fetch('/api/razorpay/create-order', {
+      const res = await fetch('/api/subscriptions', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId: product.id, planId: plan.id, paymentMethod: payMethod }),
       });
-      const pgorderdata = await pgorder.json();
-      
-      if(pgorder.ok) {
-      //   const vforder = await fetch('/api/razorpay/verify', {
-      //   method: 'POST',
-      //   headers: { 'Content-Type': 'application/json' },
-      //    body: JSON.stringify({
-      //         razorpay_order_id: pgorderdata.razorpay_order_id,
-      //         razorpay_payment_id: pgorderdata.razorpay_payment_id,
-      //         razorpay_signature: pgorderdata.razorpay_signature
-      //       }),
-      // });
-
-console.log(pgorderdata);
-       // Open Razorpay Checkout
-      const options = {
-        key: pgorderdata.data.keyId, // Replace with your Razorpay key_id
-        amount: pgorderdata.data.amount, // Amount is in currency subunits.
-        currency: pgorderdata.data.currency,
-        name: 'Teqto System LLP',
-        description: 'DataVoult Transaction',
-        callback_url: `http://localhost:3000/checkout/success?sub=sub_003`,
-        order_id: pgorderdata.data.orderId, // This is the order_id created in the backend
-        handler: async (response: { razorpay_order_id: any; razorpay_payment_id: any; razorpay_signature: any; }) => {
-          try {
-            const resss = await fetch("/api/razorpay/verify", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-            
-              body: JSON.stringify({
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                productId : product.id,
-                planId : plan.id
-              }),
-            });
-            // Add onPaymentSuccessfull function here
-            alert("Payment successful!");
-            setLoading(false);
-          } catch (err) {
-            // Add onPaymentUnSuccessfull function here
-            alert("Payment failed: " + err);
-          }
-        },
-        prefill: {
-          name: pgorderdata.data.userName,
-          email: pgorderdata.data.userEmail,
-          contact: '9716529094'
-        },
-        theme: {
-          color: '#F37254'
-        },
-      };
-    console.log(options);
-      const rzp = new Razorpay(options);
-      rzp.open();
-
-
-
-
-      }
-    //  }
-      if (!pgorder.ok) { setError(pgorderdata.error || 'Subscription failed. Please try again.'); setProcessing(false); return; }
-   //   router.push(`/checkout/success?sub=${data.data?.subscription?.id}`);
+      const data = await res.json();
+      if (!res.ok) { setError(data.error || 'Subscription failed. Please try again.'); setProcessing(false); return; }
+      router.push(`/checkout/success?sub=${data.data?.subscription?.id}`);
     } catch {
       setError('Network error. Please check your connection and try again.');
       setProcessing(false);
@@ -219,12 +147,12 @@ console.log(pgorderdata);
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24 }}>
                   <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>Payment method</h3>
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24 }}>
-                    {(['PAYMENT GATEWAY', 'WALLET', 'BANK TRANSFER'] as const).map(m => (
+                    {(['CARD', 'PAYPAL', 'CRYPTO'] as const).map(m => (
                       <button key={m} type="button" onClick={() => setPayMethod(m)}
                         className={`method-btn${payMethod === m ? ' active' : ''}`}
                         style={{ padding: '12px 8px', borderRadius: 'var(--radius-md)', border: `1px solid ${payMethod === m ? 'var(--accent)' : 'var(--border)'}`, background: payMethod === m ? 'var(--accent-glow)' : 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: payMethod === m ? 'var(--accent-bright)' : 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: 20 }}>{ m === 'WALLET' ? '💰' : m === 'PAYMENT GATEWAY' ? '₹' :m === 'BANK TRANSFER' ? '🏦' : '₿'}</span>
-                        {m === 'PAYMENT GATEWAY' ? 'Razor Pay' : m === 'BANK TRANSFER' ? 'Bank Transfer' : 'WALLET'}
+                        <span style={{ fontSize: 20 }}>{m === 'CARD' ? '💳' : m === 'PAYPAL' ? '🅿️' : '₿'}</span>
+                        {m === 'CARD' ? 'Credit Card' : m === 'PAYPAL' ? 'PayPal' : 'Crypto'}
                       </button>
                     ))}
                   </div>
@@ -263,23 +191,17 @@ console.log(pgorderdata);
                     </div>
                   )}
 
-                  {payMethod === 'WALLET' && (
+                  {payMethod === 'PAYPAL' && (
                     <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
                       <div style={{ fontSize: 40, marginBottom: 12 }}>🅿️</div>
                       <p>You will be redirected to PayPal to complete your payment securely.</p>
                     </div>
                   )}
 
-                  {payMethod === 'BANK TRANSFER' && (
+                  {payMethod === 'CRYPTO' && (
                     <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>Kotak Mahindra Bank</div>
-                      <p>Will Proceed with Order , Post payment confirmation receipt Services will be activated</p>
-                    </div>
-                  )}
-                  {payMethod === 'PAYMENT GATEWAY' && (
-                    <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>RAZOR PAY</div>
-                      <p>Post Payment confirmation Order will be processed</p>
+                      <div style={{ fontSize: 40, marginBottom: 12 }}>₿</div>
+                      <p>A Bitcoin/Ethereum address will be generated after confirming your order.</p>
                     </div>
                   )}
                 </div>

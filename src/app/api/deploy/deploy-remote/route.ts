@@ -18,6 +18,7 @@ interface DeployRemoteRequest {
     branch?: string;
     port?: number;
     deployDir?: string;
+    env?: { key: string; value: string }[];
 }
 
 export async function POST(request: NextRequest) {
@@ -26,7 +27,8 @@ export async function POST(request: NextRequest) {
         const { 
             host, username, password, privateKeyPath, 
             repoUrl, branch = 'main', port = 5000, 
-            deployDir = '~/deployments' 
+            deployDir = '~/deployments',
+            env = []
         } = body;
 
         if (!host || !username || !repoUrl || (!password && !privateKeyPath)) {
@@ -38,22 +40,38 @@ export async function POST(request: NextRequest) {
         const uniqueFolder = `${repoName}-${Date.now()}`;
         const targetPath = `${deployDir}/${uniqueFolder}`;
 
+        const envLines = (env || []).map(v => `${v.key}=${v.value}`).join('\n');
+
         // Script updates:
         // 1. Installs pm2 globally if missing
         // 2. Clones, installs, and builds the app
-        // 3. Starts/restarts the app via PM2 with custom port environment variables
-        // 4. Saves PM2 state to persist through server reboots
+        // 3. Writes environment variables to .env
+        // 4. Starts/restarts the app via PM2 with custom port environment variables
+        // 5. Saves PM2 state to persist through server reboots
         const remoteScript = `
-            export PATH=$PATH:$HOME/.npm-global/bin:$HOME/.nvm/versions/node/$(node -v)/bin:/usr/local/bin:/usr/bin && \
-            if ! command -v pm2 &> /dev/null; then npm install -g pm2; fi && \
-            mkdir -p ${deployDir} && \
-            git clone -b ${branch} ${repoUrl} ${targetPath} && \
-            cd ${targetPath} && \
-            npm install && \
-            npm run build && \
-            PORT=${port} pm2 start npm --name "${pm2AppName}" --update-env -- start -- --port ${port} && \
+            export PATH=$PATH:$HOME/.npm-global/bin:$HOME/.nvm/versions/node/$(node -v)/bin:/usr/local/bin:/usr/bin
+            set -e
+            if ! command -v pm2 &> /dev/null; then npm install -g pm2; fi
+            mkdir -p ${deployDir}
+            git clone -b ${branch} ${repoUrl} ${targetPath}
+            cd ${targetPath}
+            cat << 'EOF' > .env
+${envLines}
+EOF
+            npm install
+            if node -e "const pkg = require('./package.json'); if (!pkg.scripts || !pkg.scripts.build) process.exit(1);" 2>/dev/null; then
+                npm run build
+            else
+                echo "No build script found, skipping build step"
+            fi
+            ln -sfn ${targetPath} ${deployDir}/${repoName}-${port}-current
+            if pm2 show "${pm2AppName}" &> /dev/null; then
+                PORT=${port} pm2 restart "${pm2AppName}" --update-env
+            else
+                PORT=${port} pm2 start npm --name "${pm2AppName}" --cwd "${deployDir}/${repoName}-${port}-current" -- start -- --port ${port}
+            fi
             pm2 save
-        `.trim().replace(/\s+/g, ' ');
+        `.trim();
 
         const result = await new Promise((resolve, reject) => {
             const conn = new Client();
