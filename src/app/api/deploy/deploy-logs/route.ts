@@ -1,93 +1,53 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Client } from 'ssh2';
-import fs from 'fs';
+import { NextRequest } from 'next/server';
+import { requireAuth } from '@/lib/auth';
+import { apiError } from '@/lib/api';
+import { rateLimit } from '@/lib/rate-limit';
+import { runSsh } from '@/lib/ssh';
+import { shellQuote } from '@/lib/shell';
+import { logsQuerySchema } from '@/lib/deploy-validation';
+import { loadServerAccess, pinHostKeyIfUnset, accessErrorResponse } from '@/lib/deploy-access';
 
-export async function GET(request: NextRequest) {
-    try {
-        const { searchParams } = new URL(request.url);
-        const host = searchParams.get('host');
-        const username = searchParams.get('username');
-        const password = searchParams.get('password') || undefined;
-        const privateKeyPath = searchParams.get('privateKeyPath') || undefined;
-        const pm2AppName = searchParams.get('pm2AppName');
-        const lines = searchParams.get('lines') || '100'; 
-        
-        // Options: "out" (standard console logs) or "error" (runtime failures)
-        const type = searchParams.get('type') || 'out'; 
+/**
+ * GET /api/deploy/deploy-logs?subscriptionId=…&pm2AppName=…&type=out|error&lines=100
+ *
+ * Tails a PM2 log on the caller's own VPS. No credentials in the URL: the
+ * server looks them up from the subscription.
+ */
+export async function GET(req: NextRequest) {
+  try {
+    const session = await requireAuth();
+    const userId = session.userId as string;
 
-        if (!host || !username || !pm2AppName) {
-            return NextResponse.json(
-                { error: 'Missing host, username, or pm2AppName query parameters' }, 
-                { status: 400 }
-            );
-        }
+    // The UI polls every few seconds; allow that, block abuse.
+    const limit = rateLimit(`deploy-logs:${userId}`, 60, 60_000);
+    if (!limit.allowed) return apiError('Too many requests', 429);
 
-        // Target the absolute default PM2 disk logging directories
-        const logFilePath = `~/.pm2/logs/${pm2AppName}-${type}.log`;
-        
-        // Execute a fast tail command to pull lines directly from the remote filesystem
-        const remoteScript = `tail -n ${lines} ${logFilePath}`;
+    const q = Object.fromEntries(new URL(req.url).searchParams);
+    const parsed = logsQuerySchema.safeParse(q);
+    if (!parsed.success) return apiError(parsed.error.errors[0].message, 400);
+    const { subscriptionId, pm2AppName, type, lines } = parsed.data;
 
-        const fileLogs = await new Promise<string>((resolve, reject) => {
-            const conn = new Client();
+    const access = await loadServerAccess(subscriptionId, userId);
 
-            conn.on('ready', () => {
-                conn.exec(remoteScript, (err, stream) => {
-                    if (err) {
-                        conn.end();
-                        return reject({ status: 500, error: 'File read setup failed', details: err.message });
-                    }
+    const logFile = `${pm2AppName}-${type}.log`;
+    const result = await runSsh(access.target, `tail -n ${lines} "$HOME/.pm2/logs/"${shellQuote(logFile)}`, {
+      timeoutMs: 30_000,
+    });
+    await pinHostKeyIfUnset(access.serviceConfigId, result.hostKeySha256);
 
-                    let output = '';
-                    let errorOutput = '';
-
-                    stream.on('data', (data: Buffer) => { output += data.toString(); });
-                    stream.stderr.on('data', (data: Buffer) => { errorOutput += data.toString(); });
-
-                    stream.on('close', (code: number) => {
-                        conn.end();
-                        // Exit code 0 means file read succeeded; if code > 0 check if file exists
-                        if (code === 0) {
-                            resolve(output);
-                        } else {
-                            reject({ 
-                                status: 404, 
-                                error: 'Log file could not be read', 
-                                details: errorOutput.trim() || `File ${logFilePath} may not exist yet.` 
-                            });
-                        }
-                    });
-                });
-            });
-
-            conn.on('error', (err) => {
-                reject({ status: 500, error: 'SSH Connection failed', details: err.message });
-            });
-
-            try {
-                conn.connect({
-                    host,
-                    port: 22,
-                    username,
-                    password,
-                    privateKey: privateKeyPath ? fs.readFileSync(privateKeyPath) : undefined,
-                });
-            } catch (fsErr: any) {
-                reject({ status: 400, error: 'Key file mapping error', details: fsErr.message });
-            }
-        });
-
-        return NextResponse.json({ 
-            success: true, 
-            pm2AppName, 
-            logPath: logFilePath, 
-            logs: fileLogs || '[Log file is currently empty]' 
-        });
-
-    } catch (error: any) {
-        return NextResponse.json(
-            { error: error.error || 'Internal Server Error', details: error.details || error.message },
-            { status: error.status || 500 }
-        );
+    if (result.code !== 0) {
+      return Response.json(
+        { error: 'Log file could not be read', details: result.stderr.trim() || `${logFile} may not exist yet.` },
+        { status: 404 },
+      );
     }
+    return Response.json({
+      success: true,
+      pm2AppName,
+      logPath: `~/.pm2/logs/${logFile}`,
+      logs: result.stdout || '[Log file is currently empty]',
+    });
+  } catch (e) {
+    return accessErrorResponse(e);
+  }
 }

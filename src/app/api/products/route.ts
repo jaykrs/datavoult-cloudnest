@@ -20,7 +20,7 @@ export async function GET(req: NextRequest) {
   prisma.product.findMany({
     where,
     include: {
-      plans: true,
+      plans: { where: { isDeleted: false } },
     },
     skip,
     take: limit,
@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
         features: data.features,
         specs: data.specs as object,
       },
-      include: { plans: true },
+      include: { plans: { where: { isDeleted: false } } },
     });
 
     return apiSuccess({ product }, 201);

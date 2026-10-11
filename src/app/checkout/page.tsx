@@ -2,7 +2,30 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Cloud, CreditCard, Lock, Check, ArrowLeft, Shield, Server, Package, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { Cloud, Lock, Check, ArrowLeft, Shield, Server, Package, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+
+interface RazorpaySuccess {
+  razorpay_order_id: string;
+  razorpay_payment_id: string;
+  razorpay_signature: string;
+}
+interface RazorpayInstance { open(): void; on(event: string, cb: (r: any) => void): void }
+declare global {
+  interface Window { Razorpay?: new (options: Record<string, unknown>) => RazorpayInstance }
+}
+
+/** Load Razorpay Checkout once; resolves false if the script cannot be loaded. */
+function loadRazorpay(): Promise<boolean> {
+  if (typeof window === 'undefined') return Promise.resolve(false);
+  if (window.Razorpay) return Promise.resolve(true);
+  return new Promise((resolve) => {
+    const s = document.createElement('script');
+    s.src = 'https://checkout.razorpay.com/v1/checkout.js';
+    s.onload = () => resolve(Boolean(window.Razorpay));
+    s.onerror = () => resolve(false);
+    document.body.appendChild(s);
+  });
+}
 
 interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string>; }
 interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; plans: Plan[]; }
@@ -10,31 +33,20 @@ interface Product { id: string; name: string; slug: string; description: string;
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={18} />, DOCKER: <Package size={18} />, EMAIL: <Mail size={18} /> };
 const catColor: Record<string, string> = { VPS: 'var(--vps-color)', DOCKER: 'var(--docker-color)', EMAIL: 'var(--email-color)' };
 
-function formatCard(val: string) {
-  return val.replace(/\D/g, '').slice(0, 16).replace(/(.{4})/g, '$1 ').trim();
-}
-function formatExpiry(val: string) {
-  const d = val.replace(/\D/g, '').slice(0, 4);
-  return d.length > 2 ? d.slice(0, 2) + '/' + d.slice(2) : d;
-}
-
 function CheckoutForm() {
   const searchParams = useSearchParams();
   const router = useRouter();
   const planId = searchParams.get('plan') || '';
   const productId = searchParams.get('product') || '';
+  // Set when renewing an existing subscription instead of buying a new one.
+  const renewId = searchParams.get('renew') || '';
 
   const [product, setProduct] = useState<Product | null>(null);
   const [plan, setPlan] = useState<Plan | null>(null);
   const [user, setUser] = useState<{ name: string; email: string } | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Payment form
-  const [cardName, setCardName] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [expiry, setExpiry] = useState('');
-  const [cvv, setCvv] = useState('');
-  const [payMethod, setPayMethod] = useState<'CARD' | 'PAYPAL' | 'CRYPTO'>('CARD');
+  // Card details are entered in Razorpay's hosted window — never in this page.
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [showSummary, setShowSummary] = useState(false);
@@ -57,29 +69,80 @@ function CheckoutForm() {
       });
   }, [planId, productId, router]);
 
+  /** Ask the server to verify the payment. It may need a few seconds to be captured. */
+  async function confirmPayment(resp: RazorpaySuccess) {
+    const MAX_ATTEMPTS = 6;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      try {
+        const res = await fetch('/api/razorpay/verify', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(resp),
+        });
+        const data = await res.json();
+
+        if (res.ok) {
+          router.push(`/checkout/success?sub=${data.data?.subscription?.id ?? ''}`);
+          return;
+        }
+        if (res.status !== 202) {
+          setError(data.error || 'We could not confirm your payment. If you were charged, please contact support.');
+          setProcessing(false);
+          return;
+        }
+      } catch {
+        // network blip — fall through and retry; verification is idempotent
+      }
+      await new Promise((r) => setTimeout(r, 2500));
+    }
+    // Still confirming: the payment webhook will activate the service on its own.
+    router.push('/services');
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!plan || !product) return;
+    if (!plan || !product || processing) return;
     setError('');
-
-    // Card validation
-    if (payMethod === 'CARD') {
-      if (cardNumber.replace(/\s/g, '').length < 16) { setError('Please enter a valid 16-digit card number.'); return; }
-      if (expiry.length < 5) { setError('Please enter a valid expiry date (MM/YY).'); return; }
-      if (cvv.length < 3) { setError('Please enter a valid CVV.'); return; }
-      if (!cardName.trim()) { setError('Please enter the name on card.'); return; }
-    }
-
     setProcessing(true);
+
     try {
-      const res = await fetch('/api/subscriptions', {
+      if (!(await loadRazorpay())) {
+        setError('Could not load the secure payment window. Check your connection and try again.');
+        setProcessing(false);
+        return;
+      }
+
+      // The server prices the order from the plan — the browser never sends an amount.
+      const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: product.id, planId: plan.id, paymentMethod: payMethod }),
+        body: JSON.stringify({ productId: product.id, planId: plan.id, ...(renewId && { subscriptionId: renewId }) }),
       });
-      const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Subscription failed. Please try again.'); setProcessing(false); return; }
-      router.push(`/checkout/success?sub=${data.data?.subscription?.id}`);
+      const orderData = await orderRes.json();
+      if (!orderRes.ok) {
+        setError(orderData.error || 'Could not start the payment. Please try again.');
+        setProcessing(false);
+        return;
+      }
+      const o = orderData.data;
+
+      const rzp = new window.Razorpay!({
+        key: o.keyId,
+        order_id: o.orderId,
+        amount: o.amount,
+        currency: o.currency,
+        name: 'DataVoult',
+        description: `${product.name} — ${plan.name}`,
+        prefill: { name: o.userName, email: o.userEmail },
+        theme: { color: '#3b82f6' },
+        handler: (resp: RazorpaySuccess) => { void confirmPayment(resp); },
+        modal: { ondismiss: () => setProcessing(false) },
+      });
+      rzp.on('payment.failed', (r: { error?: { description?: string } }) => {
+        setError(r.error?.description || 'The payment failed. You have not been charged.');
+        setProcessing(false);
+      });
+      rzp.open();
     } catch {
       setError('Network error. Please check your connection and try again.');
       setProcessing(false);
@@ -143,67 +206,13 @@ function CheckoutForm() {
               )}
 
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {/* Payment method selector */}
+                {/* Payment: handled entirely by Razorpay's hosted window */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24 }}>
-                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>Payment method</h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 10, marginBottom: 24 }}>
-                    {(['CARD', 'PAYPAL', 'CRYPTO'] as const).map(m => (
-                      <button key={m} type="button" onClick={() => setPayMethod(m)}
-                        className={`method-btn${payMethod === m ? ' active' : ''}`}
-                        style={{ padding: '12px 8px', borderRadius: 'var(--radius-md)', border: `1px solid ${payMethod === m ? 'var(--accent)' : 'var(--border)'}`, background: payMethod === m ? 'var(--accent-glow)' : 'var(--bg-elevated)', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, fontSize: 12, fontWeight: 500, color: payMethod === m ? 'var(--accent-bright)' : 'var(--text-secondary)' }}>
-                        <span style={{ fontSize: 20 }}>{m === 'CARD' ? '💳' : m === 'PAYPAL' ? '🅿️' : '₿'}</span>
-                        {m === 'CARD' ? 'Credit Card' : m === 'PAYPAL' ? 'PayPal' : 'Crypto'}
-                      </button>
-                    ))}
-                  </div>
-
-                  {payMethod === 'CARD' && (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                      <div>
-                        <label className="label">Name on card</label>
-                        <input className="input checkout-input" value={cardName} onChange={e => setCardName(e.target.value)} placeholder="John Doe" required />
-                      </div>
-                      <div>
-                        <label className="label">Card number</label>
-                        <div style={{ position: 'relative' }}>
-                          <input className="input checkout-input" value={cardNumber} onChange={e => setCardNumber(formatCard(e.target.value))} placeholder="1234 5678 9012 3456" maxLength={19} required style={{ paddingRight: 48, fontFamily: 'var(--font-mono)', letterSpacing: 2 }} />
-                          <CreditCard size={16} style={{ position: 'absolute', right: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
-                        </div>
-                      </div>
-                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
-                        <div>
-                          <label className="label">Expiry date</label>
-                          <input className="input checkout-input" value={expiry} onChange={e => setExpiry(formatExpiry(e.target.value))} placeholder="MM/YY" maxLength={5} required style={{ fontFamily: 'var(--font-mono)' }} />
-                        </div>
-                        <div>
-                          <label className="label">CVV</label>
-                          <input className="input checkout-input" value={cvv} onChange={e => setCvv(e.target.value.replace(/\D/g, '').slice(0, 4))} placeholder="•••" maxLength={4} required style={{ fontFamily: 'var(--font-mono)' }} />
-                        </div>
-                      </div>
-                      {/* Demo card hint */}
-                      <div style={{ background: 'var(--bg-elevated)', border: '1px solid var(--border-subtle)', borderRadius: 8, padding: '10px 14px', fontSize: 12 }}>
-                        <div style={{ color: 'var(--text-muted)', marginBottom: 4, fontWeight: 500 }}>Demo card (click to fill)</div>
-                        <button type="button" onClick={() => { setCardName('John Doe'); setCardNumber('4242 4242 4242 4242'); setExpiry('12/27'); setCvv('123'); }}
-                          style={{ fontFamily: 'var(--font-mono)', fontSize: 12, color: 'var(--accent-bright)', background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}>
-                          4242 4242 4242 4242 · 12/27 · 123
-                        </button>
-                      </div>
-                    </div>
-                  )}
-
-                  {payMethod === 'PAYPAL' && (
-                    <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>🅿️</div>
-                      <p>You will be redirected to PayPal to complete your payment securely.</p>
-                    </div>
-                  )}
-
-                  {payMethod === 'CRYPTO' && (
-                    <div style={{ textAlign: 'center', padding: '24px 0', color: 'var(--text-secondary)', fontSize: 14 }}>
-                      <div style={{ fontSize: 40, marginBottom: 12 }}>₿</div>
-                      <p>A Bitcoin/Ethereum address will be generated after confirming your order.</p>
-                    </div>
-                  )}
+                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Payment</h3>
+                  <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
+                    You will pay in a secure Razorpay window. Cards, UPI, netbanking and wallets are supported.
+                    Your card details go straight to Razorpay and never touch our servers.
+                  </p>
                 </div>
 
                 {/* Billing address */}

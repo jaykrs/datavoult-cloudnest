@@ -1,12 +1,25 @@
-import { SignJWT, jwtVerify, JWTPayload  } from 'jose';
+import { SignJWT, jwtVerify, JWTPayload } from 'jose';
 import { cookies } from 'next/headers';
-import { prisma } from './prisma';
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.JWT_SECRET || 'fallback-secret-change-in-production-32chars'
-);
+const MIN_SECRET_LENGTH = 32;
+const SESSION_SECONDS = 7 * 24 * 60 * 60;
 
- interface CustomPayload extends JWTPayload {
+/**
+ * The signing secret is mandatory — there is deliberately no fallback value.
+ * Read lazily so `next build` works without secrets, but any request that
+ * needs to sign or verify a token fails loudly when it is missing or weak.
+ */
+export function getJwtSecret(): Uint8Array {
+  const secret = process.env.JWT_SECRET;
+  if (!secret || secret.length < MIN_SECRET_LENGTH) {
+    throw new Error(
+      `JWT_SECRET must be set to a random string of at least ${MIN_SECRET_LENGTH} characters`
+    );
+  }
+  return new TextEncoder().encode(secret);
+}
+
+interface CustomPayload extends JWTPayload {
   userId: string;
   email: string;
   role: string;
@@ -17,14 +30,16 @@ export async function signToken(payload: CustomPayload): Promise<string> {
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('7d')
-    .sign(JWT_SECRET);
+    .sign(getJwtSecret());
 }
 
 export async function verifyToken(token: string): Promise<JWTPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret(), { algorithms: ['HS256'] });
     return payload as unknown as JWTPayload;
   } catch {
+    // Invalid/expired token — or a misconfigured secret, which is treated as
+    // "not authenticated" rather than leaking details to the caller.
     return null;
   }
 }
@@ -52,11 +67,21 @@ export async function requireAdmin(): Promise<JWTPayload> {
   return session;
 }
 
+/** Set-Cookie value for the session cookie (token = null clears it). */
+export function authCookie(token: string | null): string {
+  const parts = [
+    `auth-token=${token ?? ''}`,
+    'HttpOnly',
+    'Path=/',
+    `Max-Age=${token ? SESSION_SECONDS : 0}`,
+    'SameSite=Lax',
+  ];
+  if (process.env.NODE_ENV === 'production') parts.push('Secure');
+  return parts.join('; ');
+}
+
 export function createAuthResponse(token: string, data: object) {
   const response = Response.json({ success: true, ...data });
-  response.headers.set(
-    'Set-Cookie',
-    `auth-token=${token}; HttpOnly; Path=/; Max-Age=${7 * 24 * 60 * 60}; SameSite=Lax`
-  );
+  response.headers.set('Set-Cookie', authCookie(token));
   return response;
 }

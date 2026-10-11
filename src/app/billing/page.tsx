@@ -75,9 +75,9 @@ export default function BillingPage() {
           {/* Summary cards */}
           <div className="billing-grid">
             {[
-              { label: 'Total Spend',  value: `$${totalSpend.toFixed(2)}`, sub: 'All time',       color: 'var(--green)'  },
+              { label: 'Total Spend',  value: `₹${totalSpend.toFixed(2)}`, sub: 'All time',       color: 'var(--green)'  },
               { label: 'Invoices',     value: total,                        sub: 'Total records',  color: 'var(--accent)' },
-              { label: 'This Month',   value: `$${monthSpend.toFixed(2)}`,  sub: 'Current period', color: 'var(--purple)' },
+              { label: 'This Month',   value: `₹${monthSpend.toFixed(2)}`,  sub: 'Current period', color: 'var(--purple)' },
             ].map(c => (
               <div key={c.label} className="billing-card">
                 <div className="billing-card-label">{c.label}</div>
@@ -131,7 +131,7 @@ export default function BillingPage() {
                             </>
                           ) : '—'}
                         </td>
-                        <td style={{ fontSize: 14, fontWeight: 600 }}>${Number(p.amount).toFixed(2)}</td>
+                        <td style={{ fontSize: 14, fontWeight: 600 }}>₹{Number(p.amount).toFixed(2)}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             {statusIcon[p.status]}

@@ -105,7 +105,7 @@ export default function DashboardPage() {
                       </div>
                       <div style={{ textAlign: 'right', flexShrink: 0 }}>
                         <span className={`badge badge-${sub.status.toLowerCase()}`}>{sub.status}</span>
-                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>${sub.plan.price}/mo</div>
+                        <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>₹{sub.plan.price}/mo</div>
                       </div>
                     </div>
                   );

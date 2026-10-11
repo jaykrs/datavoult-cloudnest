@@ -68,6 +68,9 @@ model Plan {
   price         Decimal  @db.Decimal(10, 2)
   billingCycle  BillingCycle @default(MONTHLY)
   isPopular     Boolean  @default(false)
+  /// Soft delete: existing subscriptions keep referencing the plan, but it is
+  /// hidden from the catalogue and cannot be purchased.
+  isDeleted     Boolean  @default(false)
   limits        Json
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
@@ -97,7 +100,9 @@ model Subscription {
   plan         Plan     @relation(fields: [planId], references: [id])
   payments     Payment[]
   serviceConfig ServiceConfig?
+  provisioningJob ProvisioningJob?
 
+  @@index([status, renewsAt])
   @@map("subscriptions")
 }
 
@@ -107,15 +112,36 @@ model ServiceConfig {
   hostname       String?
   ipAddress      String?
   domain         String?
+  /// Encrypted at rest: { enc: "v1:<iv>:<tag>:<ciphertext>" } — see src/lib/crypto.ts.
+  /// Never returned to clients; use src/lib/serializers.ts.
   credentials    Json?
   config         Json?
   region         String?
+  /// SHA-256 (hex) of the server's SSH host key. Supplied at provisioning time
+  /// when the provider knows it, otherwise pinned on first connect.
+  hostKeySha256  String?
   createdAt      DateTime @default(now())
   updatedAt      DateTime @updatedAt
 
   subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
 
   @@map("service_configs")
+}
+
+/// One job per subscription: turns a paid order into a real service.
+model ProvisioningJob {
+  id             String            @id @default(cuid())
+  subscriptionId String            @unique
+  status         ProvisioningStatus @default(QUEUED)
+  attempts       Int               @default(0)
+  lastError      String?           @db.Text
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([status, updatedAt])
+  @@map("provisioning_jobs")
 }
 
 model Payment {
@@ -126,7 +152,8 @@ model Payment {
   currency       String        @default("INR")
   status         PaymentStatus @default(PENDING)
   method         PaymentMethod @default(CARD)
-  gatewayId      String?
+  /// Unique so a gateway payment can only ever be fulfilled once (idempotency).
+  gatewayId      String?       @unique
   gatewayData    Json?
   invoiceUrl     String?
   paidAt         DateTime?
@@ -193,6 +220,7 @@ enum BillingCycle {
 }
 
 enum SubscriptionStatus {
+  PENDING
   ACTIVE
   SUSPENDED
   CANCELLED
@@ -212,6 +240,16 @@ enum PaymentMethod {
   PAYPAL
   CRYPTO
   BANK_TRANSFER
+  UPI
+  NETBANKING
+  WALLET
+}
+
+enum ProvisioningStatus {
+  QUEUED
+  RUNNING
+  DONE
+  FAILED
 }
 
 enum TicketStatus {

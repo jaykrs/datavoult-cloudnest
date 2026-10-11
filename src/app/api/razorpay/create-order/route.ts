@@ -1,96 +1,86 @@
 import { NextRequest } from 'next/server';
+import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError } from '@/lib/api';
 import { requireAuth } from '@/lib/auth';
 import { toPaise, makeReceipt, CURRENCY } from '@/lib/currency';
+import { getRazorpay, razorpayConfigured, type OrderNotes } from '@/lib/razorpay';
+import { rateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 const schema = z.object({
-  productId: z.string(),
-  planId: z.string(),
+  productId: z.string().min(1),
+  planId: z.string().min(1),
+  /** Set to renew an existing subscription instead of buying a new one. */
+  subscriptionId: z.string().min(1).optional(),
 });
 
 /**
  * POST /api/razorpay/create-order
  *
- * Creates a Razorpay order and returns {orderId, amount, currency, keyId}
- * so the frontend can open the Razorpay checkout modal.
- *
- * Razorpay SDK is loaded server-side using the secret key.
+ * Creates a Razorpay order for a plan and returns what the browser needs to
+ * open the Razorpay Checkout modal. The price always comes from our database,
+ * never from the client. The order notes (user, product, plan, renewal
+ * target) are what the server later trusts when it fulfils the payment.
  */
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAuth();
-    const body    = await req.json();
-    const { productId, planId } = schema.parse(body);
+    const userId = session.userId as string;
 
-    // Validate plan
-    const plan = await prisma.plan.findFirst({ where: { id: planId, productId } });
-    if (!plan) return apiError('Plan not found', 404);
-    if (!plan?.price) apiError('Plan price not found', 404);
-    // Check for duplicate active subscription
-    const existing = await prisma.subscription.findFirst({
-      where: { userId: session.userId as string, productId, status: { in: ['ACTIVE', 'TRIAL'] } },
-    });
-    if (existing) return apiError('You already have an active subscription to this product', 409);
+    const limit = rateLimit(`order:${userId}`, 20, 10 * 60_000);
+    if (!limit.allowed) return apiError('Too many checkout attempts. Please wait a moment.', 429);
 
-    // Fetch user for Razorpay notes
-    const user = await prisma.user.findUnique({ where: { id: session.userId as string}, select: { name: true, email: true } });
+    const { productId, planId, subscriptionId } = schema.parse(await req.json());
 
-    const amountPaise = toPaise(plan.price.toNumber()); // e.g. ₹499 → 49900 paise
+    if (!razorpayConfigured()) return apiError('Payments are not configured', 503);
 
-    // ── Dynamic Razorpay import (avoids build errors if package not installed) ──
-    let Razorpay: typeof import('razorpay');
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const mod = require('razorpay');
-      Razorpay = mod.default || mod;
-    } catch {
-      return apiError('Razorpay SDK not installed. Run: npm install razorpay', 500);
+    const plan = await prisma.plan.findFirst({ where: { id: planId, productId }, include: { product: true } });
+    // A soft-deleted plan can still be renewed by people already on it, but not newly bought.
+    if (!plan || (plan.isDeleted && !subscriptionId)) return apiError('Plan not found', 404);
+    if (plan.product.status !== 'ACTIVE') return apiError('This product is not available for purchase', 409);
+    if (plan.price.lte(0)) return apiError('This plan has no price configured', 409);
+
+    if (subscriptionId) {
+      // Renewal: must be the caller's own, on the same plan, and not cancelled.
+      const sub = await prisma.subscription.findFirst({ where: { id: subscriptionId, userId } });
+      if (!sub) return apiError('Subscription not found', 404);
+      if (sub.planId !== plan.id) return apiError('Plan does not match this subscription', 400);
+      if (!['ACTIVE', 'SUSPENDED', 'EXPIRED'].includes(sub.status)) {
+        return apiError('This subscription cannot be renewed', 409);
+      }
+    } else {
+      const existing = await prisma.subscription.findFirst({
+        where: { userId, productId, status: { in: ['ACTIVE', 'TRIAL', 'PENDING'] } },
+      });
+      if (existing) return apiError('You already have a subscription to this product', 409);
     }
 
-    const keyId     = process.env.RAZORPAY_KEY_ID     || '';
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });
+    const amountPaise = toPaise(plan.price.toNumber());
 
-    if (!keyId || !keySecret) {
-      return apiError('Razorpay keys not configured. Set RAZORPAY_KEY_ID and RAZORPAY_KEY_SECRET in .env', 500);
-    }
-
-    const razorpay = new Razorpay({ key_id: keyId, key_secret: keySecret });
-
-    // Temporary receipt id — will be linked to subscription after payment
-    const receipt = makeReceipt(`${session.userId}-${planId}`);
-
-    const order = await (razorpay.orders.create as Function)({
-      amount:   amountPaise,
+    const notes: OrderNotes = { userId, productId, planId, ...(subscriptionId ? { subscriptionId } : {}) };
+    const order = await getRazorpay().orders.create({
+      amount: amountPaise,
       currency: CURRENCY,
-      receipt,
-      notes: {
-        userId:    session.userId,
-        productId,
-        planId,
-        userName:  user?.name  || '',
-        userEmail: user?.email || '',
-        planName:  plan.name,
-        amount:    String(plan.price),
-      },
+      receipt: makeReceipt(crypto.randomUUID()),
+      notes: notes as unknown as Record<string, string>,
     });
 
     return apiSuccess({
-      orderId:  order.id,
-      amount:   amountPaise,
+      orderId: order.id,
+      amount: amountPaise,
       currency: CURRENCY,
-      keyId,
+      keyId: process.env.RAZORPAY_KEY_ID,
       planName: plan.name,
       planPrice: plan.price,
-      userName:  user?.name  || '',
+      userName: user?.name || '',
       userEmail: user?.email || '',
     });
-
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     if (e instanceof z.ZodError) return apiError(e.errors[0].message);
     console.error('[razorpay/create-order]', e);
-    return apiError('Failed to create Razorpay order', 500);
+    return apiError('Failed to create payment order', 500);
   }
 }

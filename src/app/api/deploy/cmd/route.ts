@@ -1,92 +1,47 @@
-import { NextRequest, NextResponse } from 'next/server';
-import { Client } from 'ssh2';
-import fs from 'fs';
+import { NextRequest } from 'next/server';
+import { z } from 'zod';
+import { requireAuth } from '@/lib/auth';
+import { apiError } from '@/lib/api';
+import { rateLimit } from '@/lib/rate-limit';
+import { runSsh } from '@/lib/ssh';
+import { buildInstallCommand, INSTALLABLE_SOFTWARE } from '@/lib/install-recipes';
+import { loadServerAccess, pinHostKeyIfUnset, accessErrorResponse } from '@/lib/deploy-access';
 
-// 1. Define custom error interface for our SSH Promise rejection
-interface SshError {
-    status?: number;
-    error?: string;
-    details?: string;
-    stderr?: string;
-    exitCode?: number;
-    message?: string;
-}
+const schema = z.object({
+  subscriptionId: z.string().min(1),
+  software: z.enum(INSTALLABLE_SOFTWARE),
+});
 
-export async function POST(request: NextRequest) {
-    try {
-        const body = await request.json();
-        const { host, username, password, privateKey, packageName } = body;
+/**
+ * POST /api/deploy/cmd — install a supported package on the caller's own VPS.
+ *
+ * Requires a session. The caller names a subscription and one of a fixed set
+ * of software keys; credentials and the actual command are server-side only.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    const session = await requireAuth();
+    const userId = session.userId as string;
 
-        if (!host || !username || !packageName || (!password && !privateKey)) {
-            return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
-        }
+    const limit = rateLimit(`deploy-cmd:${userId}`, 10, 10 * 60_000);
+    if (!limit.allowed) return apiError('Too many operations. Please wait before trying again.', 429);
 
-        const result = await new Promise((resolve, reject) => {
-            const conn = new Client();
+    const parsed = schema.safeParse(await req.json());
+    if (!parsed.success) return apiError('Choose a supported software package', 400);
+    const { subscriptionId, software } = parsed.data;
 
-            conn.on('ready', () => {
-                const command = `sudo apt-get update -y && sudo apt-get install -y ${packageName}`;
+    const access = await loadServerAccess(subscriptionId, userId);
+    const result = await runSsh(access.target, buildInstallCommand(software));
+    await pinHostKeyIfUnset(access.serviceConfigId, result.hostKeySha256);
 
-                conn.exec(command, (err, stream) => {
-                    if (err) {
-                        conn.end();
-                        return reject({ status: 500, error: 'Command execution failed', details: err.message });
-                    }
-
-                    let output = '';
-                    let errorOutput = '';
-
-                    stream.on('data', (data: Buffer) => {
-                        output += data.toString();
-                    });
-
-                    stream.stderr.on('data', (data: Buffer) => {
-                        errorOutput += data.toString();
-                    });
-
-                    stream.on('close', (code: number) => {
-                        conn.end();
-                        if (code === 0) {
-                            resolve({ success: true, message: `Package '${packageName}' installed`, output });
-                        } else {
-                            reject({ status: 500, error: 'Installation failed', exitCode: code, stderr: errorOutput });
-                        }
-                    });
-                });
-            });
-
-            conn.on('error', (err) => {
-                reject({ status: 500, error: 'SSH Connection error', details: err.message });
-            });
-
-            try {
-                conn.connect({
-                    host,
-                    port: 22,
-                    username,
-                    password,
-                    privateKey: privateKey ? fs.readFileSync(privateKey) : undefined,
-                });
-            } catch (fsErr: any) {
-                reject({ status: 400, error: 'Failed to read private key file', details: fsErr.message });
-            }
-        });
-
-        return NextResponse.json(result);
-
-    } catch (error) {
-        // 2. Cast the unknown error to our specific SshError interface
-        const err = error as SshError;
-        
-        const status = err.status || 500;
-        return NextResponse.json(
-            { 
-                error: err.error || 'Internal Server Error', 
-                details: err.details || err.message,
-                stderr: err.stderr || undefined,
-                exitCode: err.exitCode || undefined
-            }, 
-            { status }
-        );
+    if (result.code === 0) {
+      return Response.json({ success: true, message: `${software} installed`, output: result.stdout, truncated: result.truncated });
     }
+    return Response.json(
+      { error: 'Installation failed', details: `Exited with code ${result.code}`, stderr: result.stderr, exitCode: result.code },
+      { status: 500 },
+    );
+  } catch (e) {
+    return accessErrorResponse(e);
+  }
 }

@@ -65,8 +65,16 @@ export const createPlanSchema = z.object({
   limits: z.record(z.unknown()),
 });
 
-export const subscribeSchema = z.object({
-  productId: z.string(),
-  planId: z.string(),
-  paymentMethodId: z.string().optional(),
+/** Partial update for a plan — only these fields can ever be changed. */
+export const updatePlanSchema = createPlanSchema.omit({ productId: true }).partial();
+
+/** Partial update for a product — only these fields can ever be changed. */
+export const updateProductSchema = createProductSchema
+  .partial()
+  .extend({ status: z.enum(['ACTIVE', 'INACTIVE', 'COMING_SOON']).optional() });
+
+export const updateProfileSchema = z.object({
+  name: z.string().trim().min(2).max(100).optional(),
+  currentPassword: z.string().min(1).max(100).optional(),
+  newPassword: z.string().min(8).max(100).optional(),
 });

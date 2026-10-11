@@ -4,6 +4,15 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
+  // The seed creates an ADMIN account with a publicly documented password.
+  // Never let that happen against a production database by accident.
+  if (process.env.NODE_ENV === 'production' && process.env.SEED_ALLOW_DEMO !== '1') {
+    throw new Error(
+      'Refusing to seed demo accounts (admin@cloudnest.io / known password) with NODE_ENV=production. ' +
+      'Set SEED_ALLOW_DEMO=1 only if you really mean it, and change the passwords immediately.'
+    );
+  }
+
   console.log('🌱 Seeding database...');
 
   // Create admin user (matching demo credentials)

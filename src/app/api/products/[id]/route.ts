@@ -1,16 +1,18 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
-import { apiSuccess, apiError } from '@/lib/api';
+import { apiSuccess, apiError, updateProductSchema } from '@/lib/api';
 import { requireAdmin } from '@/lib/auth';
 import { z } from 'zod';
 
 interface Params { params: { id: string } }
 
+const livePlans = { where: { isDeleted: false }, orderBy: { price: 'asc' as const } };
+
 export async function GET(_req: NextRequest, { params }: Params) {
   try {
     const product = await prisma.product.findFirst({
       where: { OR: [{ id: params.id }, { slug: params.id }] },
-      include: { plans: true },
+      include: { plans: livePlans },
     });
 
     if (!product) return apiError('Product not found', 404);
@@ -23,12 +25,15 @@ export async function GET(_req: NextRequest, { params }: Params) {
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     await requireAdmin();
-    const body = await req.json();
+    const data = updateProductSchema.parse(await req.json());
 
     const product = await prisma.product.update({
       where: { id: params.id },
-      data: body,
-      include: { plans: true },
+      data: {
+        ...data,
+        ...(data.specs !== undefined && { specs: data.specs as object }),
+      },
+      include: { plans: livePlans },
     });
 
     return apiSuccess({ product });

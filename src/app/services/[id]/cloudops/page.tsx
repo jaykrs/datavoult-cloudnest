@@ -9,6 +9,7 @@ import { SOFTWARE_OPTIONS } from '@/config/software';
 export default function CloudOpsPage({ params }: { params: { id: string } }) {
   const [user, setUser] = useState(null);
   const [sub, setSub] = useState<any>(null);
+  const [loaded, setLoaded] = useState(false);
 
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
@@ -18,10 +19,12 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
     fetch(`/api/subscriptions/${params.id}`)
       .then(res => res.json())
       .then(data => {
-        if (data && data.data) {
-          setSub(data.data);
+        if (data?.data?.subscription) {
+          setSub(data.data.subscription);
         }
-      });
+      })
+      .catch(() => {})
+      .finally(() => setLoaded(true));
   }, [params.id]);
 
   const [software, setSoftware] = useState('nodejs');
@@ -71,11 +74,8 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
   const [logStatus, setLogStatus] = useState<'PENDING'|'RUNNING'|'SUCCESS'|'FAILED'>('PENDING');
   
   // History state
-  const [history, setHistory] = useState<{id: string, title: string, status: 'SUCCESS'|'FAILED'|'RUNNING', time: string}[]>([
-    { id: '1', title: 'Installed Node.js v20', status: 'SUCCESS', time: '2 hours ago' },
-    { id: '2', title: 'Installed Docker', status: 'SUCCESS', time: '1 day ago' },
-    { id: '3', title: 'Deployed my-app', status: 'SUCCESS', time: '2 days ago' }
-  ]);
+  // Operations performed in this browser session (no persisted history yet).
+  const [history, setHistory] = useState<{id: string, title: string, status: 'SUCCESS'|'FAILED'|'RUNNING', time: string}[]>([]);
 
   const logsEndRef = useRef<HTMLDivElement>(null);
   const pollIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -105,13 +105,13 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
     setTimeout(() => setToast(null), 3000);
   };
 
-  const getCredentials = () => {
-    const ip = sub?.serviceConfig?.ipAddress || '127.0.0.1';
-    return { host: ip, username: 'root', password: 'password' };
-  };
+  // Server access is resolved on the server from the subscription id; no
+  // credentials ever exist in (or travel through) the browser.
+  const subscriptionId = params.id;
+  const ready = sub?.status === 'ACTIVE' && Boolean(sub?.serviceConfig?.ipAddress);
 
   const handleInstall = async () => {
-    if (installing) return;
+    if (installing || !ready) return;
     setInstalling(true);
     setOperationTitle(`Installing ${software} v${version.split(' ')[0]}`);
     setLogStatus('RUNNING');
@@ -120,14 +120,10 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
     addLog(`Initiating installation for ${software} v${version.split(' ')[0]}...`);
 
     try {
-      const creds = getCredentials();
       const res = await fetch('/api/deploy/cmd', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          ...creds,
-          packageName: software
-        })
+        body: JSON.stringify({ subscriptionId, software })
       });
       const data = await res.json();
       
@@ -153,12 +149,13 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
     }
   };
 
-  const pollLogs = (pm2AppName: string, host: string) => {
+  const pollLogs = (pm2AppName: string) => {
     if (pollIntervalRef.current) clearInterval(pollIntervalRef.current);
-    
+
     pollIntervalRef.current = setInterval(async () => {
       try {
-        const res = await fetch(`/api/deploy/deploy-logs?host=${host}&username=root&password=password&pm2AppName=${pm2AppName}&lines=50`);
+        const qs = new URLSearchParams({ subscriptionId, pm2AppName, lines: '50' });
+        const res = await fetch(`/api/deploy/deploy-logs?${qs}`);
         const data = await res.json();
         if (res.ok && data.logs) {
           setLogs(prev => {
@@ -173,7 +170,7 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
   };
 
   const handleDeploy = async () => {
-    if (deploying || !repoUrl) return;
+    if (deploying || !repoUrl || !ready) return;
     setDeploying(true);
     setOperationTitle(`Deploying application to port ${port}`);
     setLogStatus('RUNNING');
@@ -182,15 +179,14 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
     addLog(`Preparing deployment from ${repoUrl} (branch: ${branch})...`);
 
     try {
-      const creds = getCredentials();
       const res = await fetch('/api/deploy/deploy-remote', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          ...creds,
+          subscriptionId,
           repoUrl,
           branch,
-          port: parseInt(port),
+          port: parseInt(port, 10),
           env: envVars.filter(v => v.key.trim() !== '')
         })
       });
@@ -204,7 +200,7 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
         setHistory(prev => [{id: Date.now().toString(), title: `Deployed application`, status: 'SUCCESS' as const, time: 'Just now'}, ...prev].slice(0, 4));
         
         if (data.pm2AppName) {
-          pollLogs(data.pm2AppName, creds.host);
+          pollLogs(data.pm2AppName);
         }
       } else {
         addLog(`Error: ${data.error} - ${data.details}`);
@@ -256,7 +252,17 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
         </div>
 
         <div className="page-content" style={{paddingTop: 0, maxWidth: 1200, margin: '0 auto', width: '100%'}}>
-          
+
+          {loaded && !ready && (
+            <div className="card" style={{padding: '16px 20px', marginBottom: 24, fontSize: 14, color: 'var(--text-secondary)'}}>
+              {sub
+                ? sub.status !== 'ACTIVE'
+                  ? `This service is ${String(sub.status).toLowerCase()}, so remote management is unavailable.`
+                  : 'Your server is still being set up. Remote management will be available as soon as it is ready.'
+                : 'We could not load this service.'}
+            </div>
+          )}
+
           {/* Top Row: Symmetrical Layout for Install and Deploy */}
           <div style={{display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(450px, 1fr))', gap: 32, marginBottom: 32}}>
             
@@ -298,7 +304,7 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
                 <div style={{marginTop: 'auto', paddingTop: 8}}>
                   <button 
                     onClick={handleInstall} 
-                    disabled={installing} 
+                    disabled={installing || !ready}
                     className="btn btn-primary btn-full"
                     style={{padding: '14px 24px', fontSize: 15, fontWeight: 600, borderRadius: '10px'}}
                   >
@@ -396,7 +402,7 @@ export default function CloudOpsPage({ params }: { params: { id: string } }) {
 
                   <button 
                     onClick={handleDeploy} 
-                    disabled={deploying || !repoUrl} 
+                    disabled={deploying || !repoUrl || !ready}
                     className="btn btn-primary btn-full"
                     style={{padding: '14px 24px', fontSize: 15, fontWeight: 600, background: 'linear-gradient(90deg, var(--accent), var(--purple))', border: 'none', borderRadius: '10px'}}
                   >

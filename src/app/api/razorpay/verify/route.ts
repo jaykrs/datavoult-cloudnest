@@ -3,126 +3,92 @@ import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError } from '@/lib/api';
 import { requireAuth } from '@/lib/auth';
-import { CURRENCY } from '@/lib/currency';
+import { safeEqual } from '@/lib/crypto';
+import { fulfillPayment, FulfillmentError } from '@/lib/fulfillment';
+import { getRazorpay, parseOrderNotes, mapPaymentMethod } from '@/lib/razorpay';
+import { publicServiceConfig } from '@/lib/serializers';
+import { rateLimit } from '@/lib/rate-limit';
 import { z } from 'zod';
 
 const schema = z.object({
-  razorpay_order_id:   z.string(),
-  razorpay_payment_id: z.string(),
-  razorpay_signature:  z.string(),
-  productId:           z.string(),
-  planId:              z.string(),
+  razorpay_order_id:   z.string().min(1),
+  razorpay_payment_id: z.string().min(1),
+  razorpay_signature:  z.string().min(1),
 });
 
 /**
  * POST /api/razorpay/verify
  *
- * Called from client after Razorpay modal success.
- * Verifies the HMAC signature, then creates the subscription + payment record.
+ * Called by the browser after the Razorpay modal succeeds. The product and
+ * plan are NOT taken from the request: they are read back from the order
+ * Razorpay holds (which we created), so a payment for one plan can never be
+ * redeemed for another. Idempotent — retrying returns the same subscription.
  */
 export async function POST(req: NextRequest) {
   try {
     const session = await requireAuth();
-    const body    = await req.json();
-    const {
-      razorpay_order_id,
-      razorpay_payment_id,
-      razorpay_signature,
-      productId,
-      planId,
-    } = schema.parse(body);
+    const userId = session.userId as string;
 
-    // ── 1. Verify signature ──────────────────────────────────────────────────
-    const keySecret = process.env.RAZORPAY_KEY_SECRET || '';
-    if (!keySecret) return apiError('Razorpay secret key not configured', 500);
+    const limit = rateLimit(`verify:${userId}`, 30, 10 * 60_000);
+    if (!limit.allowed) return apiError('Too many requests. Please wait a moment.', 429);
 
-    const body_str = `${razorpay_order_id}|${razorpay_payment_id}`;
-    const expected = crypto
-      .createHmac('sha256', keySecret)
-      .update(body_str)
-      .digest('hex');
+    const { razorpay_order_id, razorpay_payment_id, razorpay_signature } = schema.parse(await req.json());
 
-    if (expected !== razorpay_signature) {
+    // 1. Signature proves the browser really completed this order/payment pair.
+    const keySecret = process.env.RAZORPAY_KEY_SECRET;
+    if (!keySecret) return apiError('Payments are not configured', 503);
+    const expected = crypto.createHmac('sha256', keySecret).update(`${razorpay_order_id}|${razorpay_payment_id}`).digest('hex');
+    if (!safeEqual(expected, razorpay_signature)) {
       return apiError('Payment verification failed — invalid signature', 400);
     }
 
-    // ── 2. Validate plan ─────────────────────────────────────────────────────
-    const plan = await prisma.plan.findFirst({ where: { id: planId, productId } });
-    if (!plan) return apiError('Plan not found', 404);
+    // 2. Read the order and payment from Razorpay itself.
+    const razorpay = getRazorpay();
+    const [order, payment] = await Promise.all([
+      razorpay.orders.fetch(razorpay_order_id),
+      razorpay.payments.fetch(razorpay_payment_id),
+    ]);
 
-    // ── 3. Guard against duplicate subscriptions ─────────────────────────────
-    const existing = await prisma.subscription.findFirst({
-      where: { userId: session.userId as string, productId, status: { in: ['ACTIVE', 'TRIAL'] } },
-    });
-    if (existing) return apiError('Already subscribed to this product', 409);
+    const notes = parseOrderNotes(order.notes);
+    if (!notes) return apiError('Unrecognised order', 400);
+    if (notes.userId !== userId) return apiError('This order belongs to another account', 403);
+    if (payment.order_id !== razorpay_order_id) return apiError('Payment does not belong to this order', 400);
 
-    // ── 4. Compute renewal date ───────────────────────────────────────────────
-    const now      = new Date();
-    const renewsAt = new Date(now);
-    renewsAt.setMonth(
-      renewsAt.getMonth() + (
-        plan.billingCycle === 'ANNUAL'    ? 12 :
-        plan.billingCycle === 'QUARTERLY' ? 3  : 1
-      )
-    );
+    if (payment.status === 'failed') return apiError('The payment failed. You have not been charged.', 402);
+    if (payment.status !== 'captured') {
+      // Authorised but not yet captured: the webhook fulfils it on capture.
+      // The client retries this call, which is safe.
+      return Response.json(
+        { success: false, pending: true, error: 'Payment is being confirmed. This usually takes a few seconds.' },
+        { status: 202 },
+      );
+    }
 
-    // ── 5. Provision service config ───────────────────────────────────────────
-    const randomHex = () => Math.random().toString(36).slice(2, 10);
-    const randomIp  = () =>
-      `${rn(50, 250)}.${rn(1, 254)}.${rn(1, 254)}.${rn(1, 254)}`;
-    const rn = (min: number, max: number) => Math.floor(Math.random() * (max - min) + min);
-
-    const regions = ['ap-south-1 (Mumbai)', 'ap-south-2 (Hyderabad)', 'ap-southeast-1 (Singapore)', 'us-east-1'];
-    const region  = regions[0]; // default to Mumbai for Indian customers
-
-    const product = await prisma.product.findUnique({ where: { id: productId } });
-    const isEmail = product?.category === 'EMAIL';
-
-    // ── 6. Create subscription + service config + payment (atomic) ────────────
-    const subscription = await prisma.subscription.create({
-      data: {
-        userId:    session.userId as string,
-        productId,
-        planId,
-        renewsAt,
-        serviceConfig: {
-          create: {
-            hostname:  isEmail ? `mail-${randomHex()}.datavoult.io` : `srv-${randomHex()}.datavoult.io`,
-            ipAddress: isEmail ? undefined : randomIp(),
-            region,
-            config: isEmail
-              ? { imapServer: 'imap.datavoult.io', smtpServer: 'smtp.datavoult.io' }
-              : { os: 'Ubuntu 22.04 LTS' },
-          },
-        },
-      },
-      include: { product: true, plan: true, serviceConfig: true },
+    // 3. Grant the service (idempotent).
+    const result = await fulfillPayment({
+      orderId: razorpay_order_id,
+      paymentId: razorpay_payment_id,
+      amountPaise: Number(payment.amount),
+      method: mapPaymentMethod(payment.method),
+      notes,
     });
 
-    await prisma.payment.create({
-      data: {
-        userId:         session.userId as string,
-        subscriptionId: subscription.id,
-        amount:         plan.price,
-        currency:       CURRENCY,
-        status:         'COMPLETED',
-        method:         'CARD',
-        gatewayId:      razorpay_payment_id,
-        gatewayData:    {
-          orderId:   razorpay_order_id,
-          paymentId: razorpay_payment_id,
-          signature: razorpay_signature,
-          gateway:   'razorpay',
-        },
-        paidAt: now,
-      },
-    });
+    const subscription = result.subscriptionId
+      ? await prisma.subscription.findUnique({
+          where: { id: result.subscriptionId },
+          include: { product: true, plan: true, serviceConfig: publicServiceConfig },
+        })
+      : null;
 
-    return apiSuccess({ subscription }, 201);
-
+    return apiSuccess({ subscription, outcome: result.outcome }, result.outcome === 'created' ? 201 : 200);
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     if (e instanceof z.ZodError) return apiError(e.errors[0].message);
+    if (e instanceof FulfillmentError) {
+      // Money was taken but we cannot grant the service: needs a human (and likely a refund).
+      console.error('[razorpay/verify] FULFILMENT FAILED — manual review needed', e.code, e.message);
+      return apiError('We received your payment but could not activate the service. Support has been alerted — please contact us with your payment ID.', 409);
+    }
     console.error('[razorpay/verify]', e);
     return apiError('Payment verification error', 500);
   }

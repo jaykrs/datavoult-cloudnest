@@ -1,7 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { verifyToken } from '@/lib/auth';
 
-// These paths are always public — no auth required
+// These paths never require a session cookie.
+//  - /api/razorpay/webhook is called by Razorpay and authenticated by its
+//    HMAC signature inside the handler.
+//  - /api/internal/* is called by a scheduler and authenticated by the
+//    CRON_SECRET bearer token inside the handler.
+// Everything else under /api (including /api/deploy) requires a valid session.
 const PUBLIC_PATHS = [
   '/',
   '/login',
@@ -10,20 +15,20 @@ const PUBLIC_PATHS = [
   '/pricing',
   '/checkout',          // checkout handles its own auth redirect client-side
   '/api/auth',
-  '/api/products',
-  '/api/install', // Added for testing
-  '/api/logs',    // Added for testing
-  '/api/deploy'      // product listing/detail is public
+  '/api/products',      // product listing/detail is public
+  '/api/razorpay/webhook',
+  '/api/internal',
 ];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Always allow static assets
+  // Always allow framework assets and static files. API routes are excluded
+  // from the "contains a dot" shortcut so e.g. /api/anything.json is not a bypass.
   if (
     pathname.startsWith('/_next') ||
     pathname.startsWith('/favicon') ||
-    pathname.includes('.')
+    (!pathname.startsWith('/api/') && pathname.includes('.'))
   ) {
     return NextResponse.next();
   }
@@ -59,13 +64,13 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
-  // Admin-only routes — redirect non-admins to dashboard
-  if (
-    pathname.startsWith('/admin') &&
-    payload.role !== 'ADMIN' &&
-    payload.role !== 'SUPER_ADMIN'
-  ) {
+  // Admin-only routes — redirect non-admins to dashboard (pages) / 403 (API)
+  const isAdminRole = payload.role === 'ADMIN' || payload.role === 'SUPER_ADMIN';
+  if (pathname.startsWith('/admin') && !isAdminRole) {
     return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+  if (pathname.startsWith('/api/admin') && !isAdminRole) {
+    return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
   }
 
   return NextResponse.next();

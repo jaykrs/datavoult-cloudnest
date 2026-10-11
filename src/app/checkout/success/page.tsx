@@ -47,7 +47,11 @@ function SuccessContent() {
             <CheckCircle size={40} color="var(--green)" />
           </div>
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, marginBottom: 8 }}>Payment successful!</h1>
-          <p style={{ color: 'var(--text-secondary)', fontSize: 16 }}>Your service has been activated. Welcome to DataVoult!</p>
+          <p style={{ color: 'var(--text-secondary)', fontSize: 16 }}>
+            {subscription && subscription.status !== 'ACTIVE'
+              ? 'We have received your payment and are setting up your service. Welcome to DataVoult!'
+              : 'Your service has been activated. Welcome to DataVoult!'}
+          </p>
         </div>
 
         {loading ? (
@@ -65,10 +69,10 @@ function SuccessContent() {
                 <h2 style={{ fontWeight: 700, fontSize: 18, marginBottom: 2 }}>{subscription.product.name}</h2>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span className={`badge badge-${subscription.product.category.toLowerCase()}`}>{subscription.product.category}</span>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{subscription.plan.name} · ${subscription.plan.price}/mo</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{subscription.plan.name} · ₹{subscription.plan.price}/mo</span>
                 </div>
               </div>
-              <span className="badge badge-active" style={{ marginLeft: 'auto' }}>ACTIVE</span>
+              <span className={`badge badge-${subscription.status === 'ACTIVE' ? 'active' : 'pending'}`} style={{ marginLeft: 'auto' }}>{subscription.status}</span>
             </div>
 
             {/* Service config */}
@@ -131,10 +135,11 @@ function SuccessContent() {
           <div style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.06em', marginBottom: 12 }}>What happens next</div>
           <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
             {[
-              '✅ A confirmation email has been sent to your inbox',
-              '🚀 Your service is already live and ready to use',
+              subscription && subscription.status !== 'ACTIVE'
+                ? '🛠️ Your service is being set up — it will show as ACTIVE on your Services page shortly'
+                : '🚀 Your service is live and ready to use',
               '📋 Manage everything from your dashboard',
-              '💳 You will be billed again on your renewal date',
+              '💳 Your renewal date is shown on the Services page',
             ].map(s => (
               <div key={s} style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{s}</div>
             ))}

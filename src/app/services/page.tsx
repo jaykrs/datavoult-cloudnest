@@ -9,8 +9,8 @@ interface User { name: string; email: string; role: string; }
 interface ServiceConfig { hostname?: string; ipAddress?: string; region?: string; }
 interface Subscription {
   id: string; status: string; renewsAt?: string;
-  product: { name: string; category: string };
-  plan: { name: string; price: number; limits: Record<string, string> };
+  product: { id: string; name: string; category: string };
+  plan: { id: string; name: string; price: number; limits: Record<string, string> };
   serviceConfig?: ServiceConfig;
 }
 
@@ -73,7 +73,7 @@ export default function ServicesPage() {
         </div>
         <div className="page-content">
           <div className="filter-bar">
-            {['all', 'active', 'suspended', 'cancelled'].map(f => (
+            {['all', 'pending', 'active', 'suspended', 'cancelled'].map(f => (
               <button key={f} onClick={() => { setFilter(f); setPage(1); }} className={`btn btn-sm${filter === f ? ' btn-primary' : ' btn-secondary'}`} style={{ textTransform: 'capitalize' }}>{f}</button>
             ))}
           </div>
@@ -101,10 +101,18 @@ export default function ServicesPage() {
                           <span className={`badge badge-${sub.status.toLowerCase()}`}>{sub.status}</span>
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                          {sub.plan.name} · ${sub.plan.price}/mo
+                          {sub.plan.name} · ₹{sub.plan.price}/mo
                           {sub.renewsAt && ` · Renews ${new Date(sub.renewsAt).toLocaleDateString()}`}
                         </div>
                       </div>
+                      {(sub.status === 'SUSPENDED' || sub.status === 'EXPIRED') && (
+                        <Link
+                          href={`/checkout?plan=${sub.plan.id}&product=${sub.product.id}&renew=${sub.id}`}
+                          className="btn btn-primary btn-sm"
+                        >
+                          Renew
+                        </Link>
+                      )}
                       {sub.status === 'ACTIVE' && (
                         <div style={{ display: 'flex', gap: 8 }}>
                           {sub.product.category === 'VPS' && (

@@ -73,7 +73,7 @@ export default function AdminPaymentsPage() {
         <div className="page-content">
           <div className="stats-grid">
             {[
-              { icon: <DollarSign size={18} />, label: 'Total Revenue',  value: `$${summary.revenue.toFixed(2)}`, color: 'var(--green)'  },
+              { icon: <DollarSign size={18} />, label: 'Total Revenue',  value: `₹${summary.revenue.toFixed(2)}`, color: 'var(--green)'  },
               { icon: <TrendingUp size={18} />, label: 'Transactions',   value: summary.count,                   color: 'var(--accent)' },
               { icon: <CheckCircle size={18}/>, label: 'Successful',     value: summary.success,                 color: 'var(--green)'  },
               { icon: <XCircle size={18} />,   label: 'Failed',          value: summary.failed,                  color: 'var(--red)'    },
