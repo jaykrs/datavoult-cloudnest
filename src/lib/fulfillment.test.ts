@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // ── Mocks (declared before importing the module under test) ──────────────────
 // vi.mock factories are hoisted above imports, so anything they reference must be hoisted too.
-const { FakeKnownRequestError, runProvisioning, db } = vi.hoisted(() => {
+const { FakeKnownRequestError, runProvisioning, notifyOrderSubscribed, db } = vi.hoisted(() => {
   class FakeKnownRequestError extends Error {
     code: string;
     constructor(message: string, opts: { code: string }) {
@@ -13,7 +13,9 @@ const { FakeKnownRequestError, runProvisioning, db } = vi.hoisted(() => {
   return {
     FakeKnownRequestError,
     runProvisioning: vi.fn(),
+    notifyOrderSubscribed: vi.fn(),
     db: {
+      product: { findUnique: vi.fn(), updateMany: vi.fn() },
       payment: { findUnique: vi.fn(), create: vi.fn() },
       plan: { findFirst: vi.fn() },
       subscription: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
@@ -25,6 +27,7 @@ const { FakeKnownRequestError, runProvisioning, db } = vi.hoisted(() => {
 vi.mock('@prisma/client', () => ({ Prisma: { PrismaClientKnownRequestError: FakeKnownRequestError } }));
 vi.mock('./provisioning', () => ({ runProvisioning, DEFAULT_REGION: 'test-region' }));
 vi.mock('./prisma', () => ({ prisma: db }));
+vi.mock('./notifications', () => ({ notifyOrderSubscribed }));
 
 import { fulfillPayment, FulfillmentError } from './fulfillment';
 
@@ -45,6 +48,9 @@ beforeEach(() => {
     Array.isArray(arg) ? Promise.all(arg) : (arg as (tx: typeof db) => Promise<unknown>)(db),
   );
   runProvisioning.mockResolvedValue('done');
+  notifyOrderSubscribed.mockResolvedValue(undefined);
+  db.product.findUnique.mockResolvedValue({ inventoryCount: null }); // unlimited by default
+  db.product.updateMany.mockResolvedValue({ count: 1 });
 });
 
 describe('fulfillPayment — new subscription', () => {
@@ -149,5 +155,41 @@ describe('fulfillPayment — renewal', () => {
     db.subscription.findFirst.mockResolvedValue({ ...sub, status: 'CANCELLED' });
     expect((await fulfillPayment(renewal).catch((e) => e)).code).toBe('NOT_RENEWABLE');
     expect(db.payment.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('fulfillPayment — inventory', () => {
+  it('does not touch stock for unlimited (null) products', async () => {
+    await fulfillPayment(input);
+    expect(db.product.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('takes one unit with a conditional (count > 0) atomic update', async () => {
+    db.product.findUnique.mockResolvedValue({ inventoryCount: 3 });
+    await fulfillPayment(input);
+    expect(db.product.updateMany).toHaveBeenCalledWith({
+      where: { id: 'prod_1', inventoryCount: { gt: 0 } },
+      data: { inventoryCount: { decrement: 1 } },
+    });
+  });
+
+  it('fails with OUT_OF_STOCK and creates nothing when the last unit is gone', async () => {
+    db.product.findUnique.mockResolvedValue({ inventoryCount: 1 });
+    db.product.updateMany.mockResolvedValue({ count: 0 });
+    await expect(fulfillPayment(input)).rejects.toMatchObject({ code: 'OUT_OF_STOCK' });
+    expect(db.subscription.create).not.toHaveBeenCalled();
+    expect(db.payment.create).not.toHaveBeenCalled();
+    expect(notifyOrderSubscribed).not.toHaveBeenCalled();
+  });
+
+  it('does not consume stock on renewal', async () => {
+    db.subscription.findFirst.mockResolvedValue({ id: 'sub_1', planId: 'plan_1', status: 'ACTIVE', renewsAt: new Date() });
+    await fulfillPayment({ ...input, notes: { ...notes, subscriptionId: 'sub_1' } });
+    expect(db.product.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('sends the order notification for new subscriptions only', async () => {
+    await fulfillPayment(input);
+    expect(notifyOrderSubscribed).toHaveBeenCalledWith('sub_new');
   });
 });

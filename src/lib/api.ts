@@ -34,16 +34,33 @@ export function buildPaginationMeta(total: number, page: number, limit: number) 
 }
 
 // Validation schemas
+export const recaptchaTokenField = z.string().max(4096).optional();
+
 export const loginSchema = z.object({
   email: z.string().email(),
   password: z.string().min(6),
+  recaptchaToken: recaptchaTokenField,
 });
 
 export const registerSchema = z.object({
   name: z.string().min(2).max(100),
   email: z.string().email(),
   password: z.string().min(8).max(100),
+  acceptPrivacy: z.literal(true, { errorMap: () => ({ message: 'You must accept the Privacy Policy to create an account' }) }),
+  recaptchaToken: recaptchaTokenField,
 });
+
+export const contactSchema = z.object({
+  name: z.string().trim().min(2, 'Please enter your name').max(100),
+  email: z.string().trim().email('Please enter a valid email').max(200),
+  subject: z.string().trim().min(3, 'Please enter a subject').max(200),
+  message: z.string().trim().min(10, 'Message must be at least 10 characters').max(5000),
+  recaptchaToken: recaptchaTokenField,
+  /** Honeypot: real users never see or fill this. */
+  website: z.string().max(500).optional(),
+});
+
+export const contactStatusSchema = z.object({ status: z.enum(['NEW', 'READ', 'RESOLVED']) });
 
 export const createProductSchema = z.object({
   name: z.string().min(1).max(200),
@@ -53,6 +70,8 @@ export const createProductSchema = z.object({
   features: z.array(z.string()),
   specs: z.record(z.unknown()),
   imageUrl: z.string().url().optional(),
+  /** Units available. null/omitted = unlimited (not tracked). 0 = sold out. */
+  inventoryCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
 });
 
 export const createPlanSchema = z.object({

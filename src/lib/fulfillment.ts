@@ -5,10 +5,11 @@ import { toPaise, CURRENCY } from './currency';
 import { addBillingCycle, nextRenewal, type Cycle } from './billing';
 import { runProvisioning, DEFAULT_REGION } from './provisioning';
 import type { OrderNotes } from './razorpay';
+import { notifyOrderSubscribed } from './notifications';
 
 /** A problem retrying will not fix (bad data, amount mismatch). Callers should not retry. */
 export class FulfillmentError extends Error {
-  constructor(public code: 'PLAN_NOT_FOUND' | 'AMOUNT_MISMATCH' | 'SUBSCRIPTION_NOT_FOUND' | 'NOT_RENEWABLE', message: string) {
+  constructor(public code: 'PLAN_NOT_FOUND' | 'AMOUNT_MISMATCH' | 'SUBSCRIPTION_NOT_FOUND' | 'NOT_RENEWABLE' | 'OUT_OF_STOCK', message: string) {
     super(message);
   }
 }
@@ -97,6 +98,23 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
 
     // ── New subscription ─────────────────────────────────────────────────────
     const subscription = await prisma.$transaction(async (tx) => {
+      // Take one unit of stock atomically. `inventoryCount: null` means
+      // unlimited and is never touched. The conditional update can't oversell
+      // even with concurrent payments; throwing rolls the whole transaction back.
+      const product = await tx.product.findUnique({
+        where: { id: notes.productId },
+        select: { inventoryCount: true },
+      });
+      if (product && product.inventoryCount !== null) {
+        const taken = await tx.product.updateMany({
+          where: { id: notes.productId, inventoryCount: { gt: 0 } },
+          data: { inventoryCount: { decrement: 1 } },
+        });
+        if (taken.count === 0) {
+          throw new FulfillmentError('OUT_OF_STOCK', `Product ${notes.productId} is out of stock`);
+        }
+      }
+
       const created = await tx.subscription.create({
         data: {
           userId: notes.userId,
@@ -118,6 +136,7 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
     } catch (e) {
       console.error('[fulfillment] provisioning threw', subscription.id, e);
     }
+    await notifyOrderSubscribed(subscription.id);
     return { outcome: 'created', subscriptionId: subscription.id };
   } catch (e) {
     if (isUniqueViolation(e)) {

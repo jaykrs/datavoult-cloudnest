@@ -5,9 +5,41 @@ import { Plus, Edit2, Trash2, Server, Package, Mail, ToggleLeft, ToggleRight, Ch
 
 interface User { name: string; email: string; role: string; }
 interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; plans: Plan[]; createdAt: string; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; plans: Plan[]; createdAt: string; }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={16} />, DOCKER: <Package size={16} />, EMAIL: <Mail size={16} /> };
+
+// ── Stock editor: blank = unlimited (not tracked), 0 = sold out ──
+function StockEditor({ productId, value, onSaved }: { productId: string; value: number | null | undefined; onSaved: () => void }) {
+  const initial = value === null || value === undefined ? '' : String(value);
+  const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setDraft(initial); }, [initial]);
+
+  async function save() {
+    const trimmed = draft.trim();
+    if (trimmed !== '' && !/^\d+$/.test(trimmed)) { alert('Stock must be a whole number (or blank for unlimited)'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryCount: trimmed === '' ? null : Number(trimmed) }),
+      });
+      if (res.ok) onSaved(); else { const d = await res.json(); alert(d.error || 'Failed to update stock'); }
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <input className="input" type="number" min={0} step={1} value={draft} onChange={e => setDraft(e.target.value)}
+        placeholder="∞" title="Blank = unlimited" style={{ width: 80, padding: '6px 8px', fontSize: 13 }} />
+      {draft !== initial && (
+        <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}><Save size={12} /></button>
+      )}
+      {value === 0 && <span className="badge badge-inactive">Sold out</span>}
+    </div>
+  );
+}
 
 // ── Minimal HTML Editor (same as product detail) ─────────────
 function HtmlEditor({ value, onChange, onSave, onCancel, saving }: {
@@ -115,7 +147,7 @@ export default function AdminProductsPage() {
     limitsRaw: '{}' 
   });
 
-  const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}' });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '' });
 
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
@@ -137,13 +169,15 @@ export default function AdminProductsPage() {
       const features = form.features.split('\n').map(f => f.trim()).filter(Boolean);
       let specs: Record<string, string> = {};
       try { specs = JSON.parse(form.specs); } catch { alert('Invalid JSON in specs'); setSaving(false); return; }
+      const stock = form.inventoryCount.trim();
+      if (stock !== '' && !/^\d+$/.test(stock)) { alert('Inventory must be a whole number (or blank for unlimited)'); setSaving(false); return; }
       const res = await fetch('/api/products', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, features, specs }),
+        body: JSON.stringify({ ...form, features, specs, inventoryCount: stock === '' ? null : Number(stock) }),
       });
       if (res.ok) {
         setShowCreateForm(false);
-        setForm({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}' });
+        setForm({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '' });
         loadProducts();
       } else { const d = await res.json(); alert(d.error || 'Failed to create product'); }
     } finally { setSaving(false); }
@@ -322,6 +356,11 @@ export default function AdminProductsPage() {
                     <label className="label">Specs (JSON)</label>
                     <input className="input" value={form.specs} onChange={e => setForm(f => ({ ...f, specs: e.target.value }))} placeholder='{"network":"1 Gbps","datacenter":"Tier 4"}' style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
                   </div>
+                  <div>
+                    <label className="label">Inventory count</label>
+                    <input className="input" type="number" min={0} step={1} value={form.inventoryCount} onChange={e => setForm(f => ({ ...f, inventoryCount: e.target.value }))} placeholder="Leave blank for unlimited" />
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Each new subscription uses one unit. At 0 the product is hidden from the public site and can&apos;t be bought.</div>
+                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="label">Features (one per line)</label>
                     <textarea className="input" value={form.features} onChange={e => setForm(f => ({ ...f, features: e.target.value }))} rows={4} placeholder={"NVMe SSD Storage\nDDoS Protection\n24/7 Support"} style={{ resize: 'vertical' }} />
@@ -349,7 +388,7 @@ export default function AdminProductsPage() {
                 {products.map(product => (
                   <div key={product.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
                     {/* Product row */}
-                    <div className="product-row" style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 16, alignItems: 'center' }}>
+                    <div className="product-row" style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1.2fr auto', gap: 16, alignItems: 'center' }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{product.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{product.slug}</div>
@@ -368,6 +407,7 @@ export default function AdminProductsPage() {
                         )}
                       </div>
                       <div><span className={`badge badge-${product.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{product.status}</span></div>
+                      <StockEditor productId={product.id} value={product.inventoryCount} onSaved={loadProducts} />
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button className="icon-btn" onClick={() => toggleStatus(product)} title="Toggle status" style={{ color: product.status === 'ACTIVE' ? 'var(--green)' : 'var(--text-muted)' }}>
                           {product.status === 'ACTIVE' ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}

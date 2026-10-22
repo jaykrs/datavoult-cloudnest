@@ -6,6 +6,7 @@ import { requireAuth } from '@/lib/auth';
 import { toPaise, makeReceipt, CURRENCY } from '@/lib/currency';
 import { getRazorpay, razorpayConfigured, type OrderNotes } from '@/lib/razorpay';
 import { rateLimit } from '@/lib/rate-limit';
+import { isInStock } from '@/lib/inventory';
 import { z } from 'zod';
 
 const schema = z.object({
@@ -54,6 +55,8 @@ export async function POST(req: NextRequest) {
         where: { userId, productId, status: { in: ['ACTIVE', 'TRIAL', 'PENDING'] } },
       });
       if (existing) return apiError('You already have a subscription to this product', 409);
+      // Renewals bypass this: people already on the product keep their service.
+      if (!isInStock(plan.product.inventoryCount)) return apiError('This product is currently out of stock', 409);
     }
 
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { name: true, email: true } });

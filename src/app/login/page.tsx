@@ -1,8 +1,10 @@
 'use client';
-import { useState, Suspense } from 'react';
+import { useState, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Database, Eye, EyeOff, ArrowRight } from 'lucide-react';
+import Recaptcha, { RECAPTCHA_SITE_KEY, type RecaptchaHandle } from '@/components/ui/Recaptcha';
+import { trackEvent } from '@/lib/analytics';
 
 function LoginForm() {
   const [email,    setEmail]    = useState('');
@@ -10,18 +12,23 @@ function LoginForm() {
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+  const [captcha,  setCaptcha]  = useState<string | null>(null);
+  const captchaRef = useRef<RecaptchaHandle>(null);
   const router       = useRouter();
   const searchParams = useSearchParams();
   const next         = searchParams.get('next') || '';
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    setError(''); setLoading(true);
+    setError('');
+    if (RECAPTCHA_SITE_KEY && !captcha) { setError('Please complete the reCAPTCHA check'); return; }
+    setLoading(true);
     try {
-      const res  = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password }) });
+      const res  = await fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ email, password, recaptchaToken: captcha || undefined }) });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Login failed'); setLoading(false); return; }
+      if (!res.ok) { setError(data.error || 'Login failed'); setLoading(false); captchaRef.current?.reset(); return; }
       localStorage.setItem('dv_user', JSON.stringify(data.user));
+      trackEvent('login', { method: 'email' });
       router.push(next || (data.user.role === 'ADMIN' || data.user.role === 'SUPER_ADMIN' ? '/admin' : '/dashboard'));
     } catch { setError('Network error. Please try again.'); setLoading(false); }
   }
@@ -64,11 +71,14 @@ function LoginForm() {
                 </button>
               </div>
             </div>
+            <Recaptcha ref={captchaRef} onChange={setCaptcha} />
             <button type="submit" className="btn btn-primary btn-full" disabled={loading} style={{ padding: 12 }}>
               {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <>Sign in <ArrowRight size={16} /></>}
             </button>
           </form>
 
+          {/* Seeded demo credentials are for local development only. */}
+          {process.env.NODE_ENV !== 'production' && (
           <div className="auth-demo-box">
             <div className="auth-demo-title">Quick demo login</div>
             <div className="auth-demo-fills">
@@ -77,6 +87,7 @@ function LoginForm() {
             </div>
             <div className="auth-demo-hint">Password for all accounts: <span style={{ color: 'var(--accent-bright)' }}>Password123!</span></div>
           </div>
+          )}
         </div>
 
         <p className="auth-foot">

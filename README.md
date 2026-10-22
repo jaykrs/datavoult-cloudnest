@@ -109,6 +109,8 @@ CREDENTIALS_ENCRYPTION_KEY=""    # openssl rand -hex 32     (encrypts customer s
 
 Payments, the webhook, the billing cron and provisioning have their own variables — see the commented [`.env.example`](.env.example) for all of them.
 
+Optional integrations (all documented in `.env.example`): **Google reCAPTCHA v2** (`NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY`), **Google Tag Manager** (`NEXT_PUBLIC_GTM_ID`) and **SMTP email** (`SMTP_*`, `MAIL_FROM`, `ADMIN_NOTIFY_EMAIL`).
+
 ### 4. Set up database
 ```bash
 # Push schema to MySQL
@@ -238,6 +240,17 @@ The app uses a custom CSS design system defined in `globals.css`:
 - **Typography**: DM Serif Display (headings) + DM Sans (body) + DM Mono (code)
 - **Dark theme** — optimized for infrastructure dashboards
 - **CSS variables** for full consistency across components
+
+---
+
+## 🍪 Privacy, Analytics, Contact & Inventory
+
+- **Cookie consent**: banner with Accept / Reject on every page; the choice is stored for a year and can be changed from the footer ("Cookie settings"). Google Tag Manager is injected **only after Accept**; rejecting (or withdrawing) loads nothing. `page_view`, `sign_up`, `login` and `contact_submit` events are pushed to the `dataLayer`.
+- **Privacy Policy** at `/privacy` (a template — have it legally reviewed). Sign-up requires ticking the policy checkbox; the acceptance time is stored (`users.privacyAcceptedAt`).
+- **reCAPTCHA v2** on sign in, sign up and the contact form, verified server-side. In production the forms are refused if `RECAPTCHA_SECRET_KEY` is missing (fails closed).
+- **Contact form** at `/contact` → stored and shown in **Admin → Messages** (search, status filter, mark read/resolved, delete, reply by email). Honeypot + rate limit; no IP is stored.
+- **Email notifications** (SMTP): welcome email + admin alert on sign-up; confirmation + admin alert on each new subscription; admin alert on contact messages. Email never blocks or breaks a request, and is skipped when SMTP is not configured.
+- **Inventory**: set an *Inventory count* when creating a product (or edit it inline in Admin → Products). Blank = unlimited. Each **new** subscription takes one unit atomically; at 0 the product disappears from the public lists and cannot be bought (renewals are unaffected). Stock is not restored on cancellation/refund — adjust it manually.
 
 ---
 

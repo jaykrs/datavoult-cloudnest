@@ -10,7 +10,7 @@ import {
 } from 'lucide-react';
 
 interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string>; description?: string; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; specs: Record<string, string>; plans: Plan[]; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; specs: Record<string, string>; plans: Plan[]; inStock?: boolean; }
 
 const categoryMeta: Record<string, { icon: React.ReactNode; color: string; glow: string }> = {
   VPS: { icon: <Server size={24} />, color: 'var(--vps-color)', glow: 'rgba(59,130,246,0.12)' },
@@ -310,9 +310,10 @@ export default function ProductDetailPage() {
                         </div>
                         <button
                           onClick={() => handleSubscribe(plan.id)}
+                          disabled={product.inStock === false}
                           className="subscribe-btn btn"
                           style={{ background: plan.isPopular ? meta.color : 'var(--bg-elevated)', color: plan.isPopular ? 'white' : 'var(--text-primary)', border: plan.isPopular ? 'none' : '1px solid var(--border)', minWidth: 160, justifyContent: 'center', padding: '12px 20px', fontSize: 15 }}>
-                          Subscribe Now
+                          {product.inStock === false ? 'Out of stock' : 'Subscribe Now'}
                         </button>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, marginTop: 20 }}>

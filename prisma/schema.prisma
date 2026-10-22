@@ -18,6 +18,8 @@ model User {
   role          Role     @default(USER)
   avatarUrl     String?
   isVerified    Boolean  @default(false)
+  /// When the user accepted the Privacy Policy at sign-up (consent record). Null for accounts created before it was asked.
+  privacyAcceptedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -51,6 +53,10 @@ model Product {
   features    Json
   specs       Json
   imageUrl    String?
+  /// Units left to sell. NULL = not tracked (unlimited). Each new subscription
+  /// uses one unit; at 0 the product is hidden from the public catalogue and
+  /// cannot be bought.
+  inventoryCount Int?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
@@ -193,6 +199,27 @@ model TicketReply {
   ticket SupportTicket @relation(fields: [ticketId], references: [id], onDelete: Cascade)
 
   @@map("ticket_replies")
+}
+
+/// Messages submitted through the public Contact Us form.
+model ContactMessage {
+  id        String        @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String        @db.Text
+  status    ContactStatus @default(NEW)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@map("contact_messages")
+}
+
+enum ContactStatus {
+  NEW
+  READ
+  RESOLVED
 }
 
 enum Role {
