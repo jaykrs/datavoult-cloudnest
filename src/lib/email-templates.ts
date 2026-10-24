@@ -138,3 +138,19 @@ export function manualPaymentRejectedEmail(m: ManualPaymentInfo): Email {
     ),
   };
 }
+
+export function invoiceIssuedEmail(i: { userName: string; number: string; total: string; hasGst: boolean; link: string | null }): Email {
+  const kind = i.hasGst ? 'tax invoice' : 'invoice';
+  return {
+    subject: `Your ${kind} ${i.number}`,
+    text: `Hi ${i.userName},\n\nYour ${kind} ${i.number} for ${i.total} is ready.${i.link ? `\nView or print it: ${i.link}` : '\nYou can view and print it from Billing in your account.'}\n\n— DataVoult`,
+    html: layout(
+      i.hasGst ? 'Your tax invoice' : 'Your invoice',
+      p(`Hi ${escapeHtml(i.userName)},`) +
+        p(`Your ${kind} <b>${escapeHtml(i.number)}</b> for <b>${escapeHtml(i.total)}</b> is ready.`) +
+        (i.link
+          ? p(`<a href="${escapeHtml(i.link)}">View or print your invoice</a>`)
+          : p('You can view and print it from Billing in your account.')),
+    ),
+  };
+}

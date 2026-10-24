@@ -1,5 +1,5 @@
 import { prisma } from './prisma';
-import { assertValidDays, orderTotalPaise, InvalidDaysError } from './pricing';
+import { assertValidDays, computeOrderAmounts, gstSettingFrom, InvalidDaysError, type OrderAmounts } from './pricing';
 import { isInStock } from './inventory';
 
 /** A reason an order can't be placed, with the HTTP status to answer with. */
@@ -13,8 +13,10 @@ export interface PreparedOrder {
   plan: { id: string; name: string; price: { toNumber(): number } };
   product: { id: string; name: string };
   days: number;
-  /** Server-computed total in paise (per-day price × days). Never taken from the client. */
+  /** Server-computed total in paise (per-day price × days, plus GST if added on top). Never taken from the client. */
   amountPaise: number;
+  /** Taxable value / GST / total breakdown behind `amountPaise`. */
+  amounts: OrderAmounts;
   subscriptionId?: string;
 }
 
@@ -22,7 +24,7 @@ export interface PreparedOrder {
  * Validate a purchase or renewal request and price it. Shared by every payment
  * method (Razorpay, UPI, bank transfer) so the rules cannot drift apart:
  * the amount always comes from the database plan × the validated number of
- * days (minimum 30), and stock/ownership checks are identical.
+ * days (minimum 30) plus the product's GST setting, and stock/ownership checks are identical.
  */
 export async function prepareOrder(input: {
   userId: string;
@@ -64,11 +66,13 @@ export async function prepareOrder(input: {
     if (!isInStock(plan.product.inventoryCount)) throw new OrderError(409, 'This product is currently out of stock');
   }
 
+  const amounts = computeOrderAmounts(plan.price.toNumber(), days, gstSettingFrom(plan.product));
   return {
     plan,
     product: plan.product,
     days,
-    amountPaise: orderTotalPaise(plan.price.toNumber(), days),
+    amountPaise: amounts.totalPaise,
+    amounts,
     ...(subscriptionId ? { subscriptionId } : {}),
   };
 }

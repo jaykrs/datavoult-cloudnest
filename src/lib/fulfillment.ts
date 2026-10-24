@@ -2,10 +2,11 @@ import { Prisma } from '@prisma/client';
 import type { PaymentMethod } from '@prisma/client';
 import { prisma } from './prisma';
 import { CURRENCY } from './currency';
-import { orderTotalPaise, addDays, nextRenewal } from './pricing';
+import { computeOrderAmounts, gstSettingFrom, addDays, nextRenewal } from './pricing';
 import { runProvisioning, DEFAULT_REGION } from './provisioning';
 import type { OrderNotes } from './razorpay';
 import { notifyOrderSubscribed } from './notifications';
+import { issueInvoiceForGatewayId } from './invoices';
 
 /** A problem retrying will not fix (bad data, amount mismatch). Callers should not retry. */
 export class FulfillmentError extends Error {
@@ -50,13 +51,23 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
   const { orderId, paymentId, amountPaise, method, notes, gateway = 'razorpay', gatewayExtra = {} } = input;
 
   const existing = await prisma.payment.findUnique({ where: { gatewayId: paymentId } });
-  if (existing) return { outcome: 'duplicate', subscriptionId: existing.subscriptionId };
+  if (existing) {
+    // Retry path: also covers an invoice that couldn't be issued the first time (e.g. seller details were missing).
+    await issueInvoiceForGatewayId(paymentId);
+    return { outcome: 'duplicate', subscriptionId: existing.subscriptionId };
+  }
 
-  const plan = await prisma.plan.findFirst({ where: { id: notes.planId, productId: notes.productId } });
+  const plan = await prisma.plan.findFirst({
+    where: { id: notes.planId, productId: notes.productId },
+    include: { product: true },
+  });
   if (!plan) throw new FulfillmentError('PLAN_NOT_FOUND', `Plan ${notes.planId} not found`);
 
-  // Price = per-day rate × days purchased; the days come from the server-created order.
-  const expectedPaise = orderTotalPaise(plan.price.toNumber(), notes.days);
+  // Price = per-day rate × days purchased (+ GST if the product adds it on top); the
+  // days come from the server-created order.
+  const gstSetting = gstSettingFrom(plan.product);
+  const amounts = computeOrderAmounts(plan.price.toNumber(), notes.days, gstSetting);
+  const expectedPaise = amounts.totalPaise;
   if (amountPaise !== expectedPaise) {
     throw new FulfillmentError(
       'AMOUNT_MISMATCH',
@@ -73,7 +84,12 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
     status: 'COMPLETED',
     method,
     gatewayId: paymentId,
-    gatewayData: { orderId, paymentId, gateway, days: notes.days, ...gatewayExtra },
+    // The tax breakdown is snapshotted here: the invoice is built from it later.
+    gatewayData: {
+      orderId, paymentId, gateway, days: notes.days,
+      basePaise: amounts.basePaise, gstPaise: amounts.gstPaise, gstRate: amounts.rate, gstInclusive: gstSetting.inclusive,
+      ...gatewayExtra,
+    },
     paidAt: now,
   });
 
@@ -99,6 +115,7 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
           },
         }),
       ]);
+      await issueInvoiceForGatewayId(paymentId);
       return { outcome: 'renewed', subscriptionId: sub.id };
     }
 
@@ -142,6 +159,7 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
     } catch (e) {
       console.error('[fulfillment] provisioning threw', subscription.id, e);
     }
+    await issueInvoiceForGatewayId(paymentId);
     await notifyOrderSubscribed(subscription.id);
     return { outcome: 'created', subscriptionId: subscription.id };
   } catch (e) {

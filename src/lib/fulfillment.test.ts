@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // ── Mocks (declared before importing the module under test) ──────────────────
 // vi.mock factories are hoisted above imports, so anything they reference must be hoisted too.
-const { FakeKnownRequestError, runProvisioning, notifyOrderSubscribed, db } = vi.hoisted(() => {
+const { FakeKnownRequestError, runProvisioning, notifyOrderSubscribed, issueInvoiceForGatewayId, db } = vi.hoisted(() => {
   class FakeKnownRequestError extends Error {
     code: string;
     constructor(message: string, opts: { code: string }) {
@@ -14,6 +14,7 @@ const { FakeKnownRequestError, runProvisioning, notifyOrderSubscribed, db } = vi
     FakeKnownRequestError,
     runProvisioning: vi.fn(),
     notifyOrderSubscribed: vi.fn(),
+    issueInvoiceForGatewayId: vi.fn(),
     db: {
       product: { findUnique: vi.fn(), updateMany: vi.fn() },
       payment: { findUnique: vi.fn(), create: vi.fn() },
@@ -28,6 +29,7 @@ vi.mock('@prisma/client', () => ({ Prisma: { PrismaClientKnownRequestError: Fake
 vi.mock('./provisioning', () => ({ runProvisioning, DEFAULT_REGION: 'test-region' }));
 vi.mock('./prisma', () => ({ prisma: db }));
 vi.mock('./notifications', () => ({ notifyOrderSubscribed }));
+vi.mock('./invoices', () => ({ issueInvoiceForGatewayId }));
 
 import { fulfillPayment, FulfillmentError } from './fulfillment';
 
@@ -49,6 +51,7 @@ beforeEach(() => {
   );
   runProvisioning.mockResolvedValue('done');
   notifyOrderSubscribed.mockResolvedValue(undefined);
+  issueInvoiceForGatewayId.mockResolvedValue(undefined);
   db.product.findUnique.mockResolvedValue({ inventoryCount: null }); // unlimited by default
   db.product.updateMany.mockResolvedValue({ count: 1 });
 });
@@ -237,5 +240,34 @@ describe('fulfillPayment — per-day pricing', () => {
     const r = await fulfillPayment({ ...input, paymentId: 'manual:req_1', gateway: 'manual' });
     expect(r).toEqual({ outcome: 'duplicate', subscriptionId: 'sub_new' });
     expect(db.subscription.create).not.toHaveBeenCalled();
+  });
+});
+
+describe('fulfillPayment — GST', () => {
+  const gstPlan = (inclusive: boolean) => ({ ...plan, product: { gstRate: { toNumber: () => 18 }, gstInclusive: inclusive } });
+
+  it('GST extra: expects price × days + GST and snapshots the tax breakdown for the invoice', async () => {
+    db.plan.findFirst.mockResolvedValue(gstPlan(false));
+    await fulfillPayment({ ...input, amountPaise: 56640 }); // ₹480 + 18%
+    const data = db.payment.create.mock.calls[0][0].data;
+    expect(data.amount).toBe('566.40');
+    expect(data.gatewayData).toMatchObject({ basePaise: 48000, gstPaise: 8640, gstRate: 18, gstInclusive: false });
+  });
+
+  it('GST extra: a payment of only the listed price is short and is refused', async () => {
+    db.plan.findFirst.mockResolvedValue(gstPlan(false));
+    const err = await fulfillPayment({ ...input, amountPaise: 48000 }).catch((e) => e);
+    expect(err.code).toBe('AMOUNT_MISMATCH');
+  });
+
+  it('GST inclusive: the listed price is the total, with GST carved out for the invoice', async () => {
+    db.plan.findFirst.mockResolvedValue(gstPlan(true));
+    await fulfillPayment({ ...input, amountPaise: 48000 });
+    expect(db.payment.create.mock.calls[0][0].data.gatewayData).toMatchObject({ basePaise: 40678, gstPaise: 7322, gstRate: 18, gstInclusive: true });
+  });
+
+  it('issues the invoice once the payment is recorded', async () => {
+    await fulfillPayment(input);
+    expect(issueInvoiceForGatewayId).toHaveBeenCalledWith('pay_1');
   });
 });

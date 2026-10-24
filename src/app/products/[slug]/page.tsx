@@ -11,7 +11,7 @@ import {
 
 /** `price` = ₹ per day. */
 interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string>; description?: string; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; specs: Record<string, string>; plans: Plan[]; inStock?: boolean; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; specs: Record<string, string>; plans: Plan[]; inStock?: boolean; gstRate?: string | number | null; gstInclusive?: boolean; }
 
 const categoryMeta: Record<string, { icon: React.ReactNode; color: string; glow: string }> = {
   VPS: { icon: <Server size={24} />, color: 'var(--vps-color)', glow: 'rgba(59,130,246,0.12)' },
@@ -305,6 +305,7 @@ export default function ProductDetailPage() {
                           </div>
                           <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
                             Choose your number of days at checkout · minimum 30 days (₹{(Number(plan.price) * 30).toFixed(2)})
+                            {Number(product.gstRate) > 0 && (product.gstInclusive === false ? ` + ${Number(product.gstRate)}% GST` : ` · incl. ${Number(product.gstRate)}% GST`)}
                           </div>
                         </div>
                         <button

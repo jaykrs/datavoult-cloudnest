@@ -5,7 +5,7 @@ import { Plus, Edit2, Trash2, Server, Package, Mail, ToggleLeft, ToggleRight, Ch
 
 interface User { name: string; email: string; role: string; }
 interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; plans: Plan[]; createdAt: string; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; gstRate?: string | number | null; gstInclusive?: boolean; sacCode?: string | null; plans: Plan[]; createdAt: string; }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={16} />, DOCKER: <Package size={16} />, EMAIL: <Mail size={16} /> };
 
@@ -37,6 +37,51 @@ function StockEditor({ productId, value, onSaved }: { productId: string; value: 
         <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}><Save size={12} /></button>
       )}
       {value === 0 && <span className="badge badge-inactive">Sold out</span>}
+    </div>
+  );
+}
+
+// ── GST settings: rate (blank/0 = no GST), included in price or added on top, SAC code ──
+function GstEditor({ product, onSaved }: { product: Product; onSaved: () => void }) {
+  const initialRate = product.gstRate === null || product.gstRate === undefined ? '' : String(Number(product.gstRate));
+  const [rate, setRate] = useState(initialRate);
+  const [inclusive, setInclusive] = useState(product.gstInclusive !== false);
+  const [sac, setSac] = useState(product.sacCode || '');
+  const [saving, setSaving] = useState(false);
+  const dirty = rate !== initialRate || inclusive !== (product.gstInclusive !== false) || sac !== (product.sacCode || '');
+
+  async function save() {
+    const t = rate.trim();
+    const n = t === '' ? null : Number(t);
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 28)) { alert('GST rate must be between 0 and 28 (or blank for no GST)'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gstRate: n === null || n === 0 ? null : n, gstInclusive: inclusive, sacCode: sac.trim() || null }),
+      });
+      if (res.ok) onSaved(); else { const d = await res.json(); alert(d.error || 'Failed to save GST settings'); }
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ padding: '16px 20px 0' }}>
+      <h3 style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>GST &amp; invoicing</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+        Leave the rate blank for <b>no GST</b> (the invoice shows no tax). With a rate, choose whether the listed price already includes GST or GST is added at checkout.
+      </p>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div><label className="label">GST rate (%)</label>
+          <input className="input" type="number" min={0} max={28} step="0.01" value={rate} onChange={e => setRate(e.target.value)} placeholder="none" style={{ width: 110, fontSize: 13 }} /></div>
+        <div><label className="label">Price is</label>
+          <select className="input" value={inclusive ? 'in' : 'ex'} onChange={e => setInclusive(e.target.value === 'in')} style={{ fontSize: 13, cursor: 'pointer' }} disabled={rate.trim() === '' || Number(rate) === 0}>
+            <option value="in">GST inclusive</option>
+            <option value="ex">GST extra (added on top)</option>
+          </select></div>
+        <div><label className="label">SAC code</label>
+          <input className="input" value={sac} onChange={e => setSac(e.target.value)} placeholder="998315" maxLength={8} style={{ width: 110, fontSize: 13, fontFamily: 'var(--font-mono)' }} /></div>
+        {dirty && <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}><Save size={13} /> Save GST</button>}
+      </div>
     </div>
   );
 }
@@ -146,7 +191,7 @@ export default function AdminProductsPage() {
     limitsRaw: '{}' 
   });
 
-  const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '' });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '', gstRate: '', gstInclusive: 'in' });
 
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
@@ -172,11 +217,15 @@ export default function AdminProductsPage() {
       if (stock !== '' && !/^\d+$/.test(stock)) { alert('Inventory must be a whole number (or blank for unlimited)'); setSaving(false); return; }
       const res = await fetch('/api/products', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, features, specs, inventoryCount: stock === '' ? null : Number(stock) }),
+        body: JSON.stringify({
+          ...form, features, specs, inventoryCount: stock === '' ? null : Number(stock),
+          gstRate: form.gstRate.trim() === '' || Number(form.gstRate) === 0 ? null : Number(form.gstRate),
+          gstInclusive: form.gstInclusive === 'in',
+        }),
       });
       if (res.ok) {
         setShowCreateForm(false);
-        setForm({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '' });
+        setForm({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '', gstRate: '', gstInclusive: 'in' });
         loadProducts();
       } else { const d = await res.json(); alert(d.error || 'Failed to create product'); }
     } finally { setSaving(false); }
@@ -356,6 +405,17 @@ export default function AdminProductsPage() {
                     <input className="input" type="number" min={0} step={1} value={form.inventoryCount} onChange={e => setForm(f => ({ ...f, inventoryCount: e.target.value }))} placeholder="Leave blank for unlimited" />
                     <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Each new subscription uses one unit. At 0 the product is hidden from the public site and can&apos;t be bought.</div>
                   </div>
+                  <div>
+                    <label className="label">GST rate (%) — blank = no GST</label>
+                    <input className="input" type="number" min={0} max={28} step="0.01" value={form.gstRate} onChange={e => setForm(f => ({ ...f, gstRate: e.target.value }))} placeholder="e.g. 18" />
+                  </div>
+                  <div>
+                    <label className="label">Listed price is</label>
+                    <select className="input" value={form.gstInclusive} onChange={e => setForm(f => ({ ...f, gstInclusive: e.target.value }))} style={{ cursor: 'pointer' }}>
+                      <option value="in">GST inclusive</option>
+                      <option value="ex">GST extra (added on top)</option>
+                    </select>
+                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="label">Features (one per line)</label>
                     <textarea className="input" value={form.features} onChange={e => setForm(f => ({ ...f, features: e.target.value }))} rows={4} placeholder={"NVMe SSD Storage\nDDoS Protection\n24/7 Support"} style={{ resize: 'vertical' }} />
@@ -423,6 +483,8 @@ export default function AdminProductsPage() {
                     {/* Expanded panel */}
                     {expandedProduct === product.id && (
                       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+
+                        <GstEditor key={`${product.id}-${product.gstRate}-${product.gstInclusive}-${product.sacCode}`} product={product} onSaved={loadProducts} />
 
                         {/* Description editor */}
                         <div style={{ padding: '20px 20px 0' }}>

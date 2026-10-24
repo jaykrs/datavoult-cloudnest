@@ -10,6 +10,7 @@ interface Payment {
   id: string; amount: number; currency: string; status: string;
   method: string; createdAt: string;
   subscription?: { product: { name: string }; plan: { name: string } };
+  invoice?: { number: string } | null;
 }
 
 const statusIcon: Record<string, React.ReactNode> = {
@@ -137,10 +138,10 @@ export default function BillingPage() {
                     <tr><th>Invoice</th><th>Service</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr>
                   </thead>
                   <tbody>
-                    {payments.map((p, i) => (
+                    {payments.map((p) => (
                       <tr key={p.id}>
                         <td style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
-                          INV-{String((page - 1) * LIMIT + i + 1).padStart(4, '0')}
+                          {p.invoice?.number ?? (p.status === 'COMPLETED' ? 'Preparing…' : '—')}
                         </td>
                         <td>
                           {p.subscription ? (
@@ -163,9 +164,11 @@ export default function BillingPage() {
                           {new Date(p.createdAt).toLocaleDateString('en-US', { year: 'numeric', month: 'short', day: 'numeric' })}
                         </td>
                         <td>
-                          <button className="btn btn-ghost btn-sm" style={{ fontSize: 12, gap: 4 }}>
-                            <Download size={12} /> PDF
-                          </button>
+                          {p.status === 'COMPLETED' && (
+                            <Link href={`/invoices/${p.id}`} className="btn btn-ghost btn-sm" style={{ fontSize: 12, gap: 4 }}>
+                              <Download size={12} /> Invoice
+                            </Link>
+                          )}
                         </td>
                       </tr>
                     ))}

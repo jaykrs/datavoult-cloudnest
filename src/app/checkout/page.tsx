@@ -3,7 +3,8 @@ import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Cloud, Lock, Check, ArrowLeft, Shield, Server, Package, Mail, ChevronDown, ChevronUp, CreditCard, Smartphone, Landmark } from 'lucide-react';
-import { MIN_ORDER_DAYS, MAX_ORDER_DAYS, orderTotalRupees } from '@/lib/pricing';
+import { MIN_ORDER_DAYS, MAX_ORDER_DAYS, computeOrderAmounts, gstSettingFrom } from '@/lib/pricing';
+import { GST_STATES } from '@/lib/gst';
 
 interface RazorpaySuccess {
   razorpay_order_id: string;
@@ -32,7 +33,8 @@ function loadRazorpay(): Promise<boolean> {
 interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string>; }
 type PayMethod = 'RAZORPAY' | 'UPI' | 'BANK_TRANSFER';
 const DAY_PRESETS = [30, 60, 90, 180, 365];
-interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; plans: Plan[]; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; plans: Plan[]; gstRate?: string | number | null; gstInclusive?: boolean; }
+interface BillingProfile { billingName: string; billingGstin: string; billingAddress: string; billingStateCode: string }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={18} />, DOCKER: <Package size={18} />, EMAIL: <Mail size={18} /> };
 const catColor: Record<string, string> = { VPS: 'var(--vps-color)', DOCKER: 'var(--docker-color)', EMAIL: 'var(--email-color)' };
@@ -60,6 +62,9 @@ function CheckoutForm() {
   const [method, setMethod] = useState<PayMethod>('RAZORPAY');
   const [manualAvailable, setManualAvailable] = useState<{ UPI: boolean; BANK_TRANSFER: boolean }>({ UPI: false, BANK_TRANSFER: false });
 
+  // Invoice details (saved to the account before paying, so the invoice is right the moment payment lands).
+  const [bill, setBill] = useState<BillingProfile>({ billingName: '', billingGstin: '', billingAddress: '', billingStateCode: '' });
+
   const daysValid = Number.isInteger(days) && days >= MIN_ORDER_DAYS && days <= MAX_ORDER_DAYS;
   function changeDays(text: string) {
     setDaysText(text);
@@ -72,6 +77,10 @@ function CheckoutForm() {
     try { setUser(JSON.parse(stored)); } catch {}
 
     if (!productId) { router.push('/products'); return; }
+    fetch('/api/billing-profile').then(r => r.json()).then(d => {
+      const pr = d.data?.profile;
+      if (pr) setBill({ billingName: pr.billingName || '', billingGstin: pr.billingGstin || '', billingAddress: pr.billingAddress || '', billingStateCode: pr.billingStateCode || '' });
+    }).catch(() => {});
     fetch('/api/payments/manual').then(r => r.json()).then(d => { if (d.data?.methods) setManualAvailable(d.data.methods); }).catch(() => {});
     fetch(`/api/products/${productId}`)
       .then(r => r.json())
@@ -115,6 +124,24 @@ function CheckoutForm() {
     router.push('/services');
   }
 
+  /** Save invoice details; returns false (with an error shown) if the server rejects them. */
+  async function saveBillingProfile(): Promise<boolean> {
+    const res = await fetch('/api/billing-profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        billingName: bill.billingName || null,
+        billingGstin: bill.billingGstin.trim() || null,
+        billingAddress: bill.billingAddress || null,
+        billingStateCode: bill.billingStateCode || null,
+      }),
+    });
+    if (res.ok) return true;
+    const d = await res.json().catch(() => ({}));
+    setError(d.error || 'Could not save your billing details.');
+    return false;
+  }
+
   /** UPI / bank transfer: create the request, then show the payment instructions. */
   async function startManualPayment(m: 'UPI' | 'BANK_TRANSFER') {
     if (!plan || !product) return;
@@ -134,6 +161,10 @@ function CheckoutForm() {
     setError('');
     if (!daysValid) { setError(`Enter a whole number of days between ${MIN_ORDER_DAYS} and ${MAX_ORDER_DAYS}.`); return; }
     setProcessing(true);
+
+    try {
+      if (!(await saveBillingProfile())) { setProcessing(false); return; }
+    } catch { setError('Network error. Please try again.'); setProcessing(false); return; }
 
     if (method !== 'RAZORPAY') {
       try { await startManualPayment(method); } catch { setError('Network error. Please try again.'); setProcessing(false); }
@@ -194,7 +225,9 @@ function CheckoutForm() {
 
   const color = catColor[product.category] || 'var(--accent)';
   const perDay = Number(plan.price);
-  const total = daysValid ? orderTotalRupees(perDay, days) : 0;
+  const gstSetting = gstSettingFrom({ gstRate: product.gstRate === undefined || product.gstRate === null ? null : Number(product.gstRate), gstInclusive: product.gstInclusive });
+  const amounts = daysValid ? computeOrderAmounts(perDay, days, gstSetting) : { basePaise: 0, gstPaise: 0, totalPaise: 0, rate: gstSetting.rate ?? 0 };
+  const total = amounts.totalPaise / 100;
 
   return (
     <>
@@ -288,34 +321,37 @@ function CheckoutForm() {
                   )}
                 </div>
 
-                {/* Billing address */}
+                {/* Invoice / billing details */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24 }}>
-                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>Billing details</h3>
+                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Billing details (for your invoice)</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 14 }}>
+                    Add your GSTIN if you are GST-registered. Your state decides whether GST is shown as CGST + SGST or IGST.
+                  </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div style={{ gridColumn: '1/-1' }}>
-                      <label className="label">Full name</label>
-                      <input className="input checkout-input" defaultValue={user?.name || ''} placeholder="John Doe" required />
-                    </div>
-                    <div style={{ gridColumn: '1/-1' }}>
-                      <label className="label">Email</label>
-                      <input className="input" value={user?.email || ''} disabled style={{ opacity: 0.6 }} />
+                      <label className="label">Name / company</label>
+                      <input className="input checkout-input" value={bill.billingName} onChange={e => setBill({ ...bill, billingName: e.target.value })} placeholder={user?.name || 'Name on the invoice'} maxLength={150} />
                     </div>
                     <div>
-                      <label className="label">Country</label>
-                      <select className="input checkout-input" style={{ cursor: 'pointer' }}>
-                        <option>India</option>
-                        <option>United Kingdom</option>
-                        <option>Germany</option>
-                        <option>France</option>
-                        <option>United States</option>
-                        <option>Australia</option>
-                        <option>Canada</option>
-                        <option>Other</option>
+                      <label className="label">GSTIN (optional)</label>
+                      <input className="input checkout-input" value={bill.billingGstin}
+                        onChange={e => {
+                          const g = e.target.value.toUpperCase();
+                          // The first two digits of a GSTIN are the state code.
+                          setBill({ ...bill, billingGstin: g, billingStateCode: /^\d{2}/.test(g) && GST_STATES[g.slice(0, 2)] ? g.slice(0, 2) : bill.billingStateCode });
+                        }}
+                        placeholder="29ABCDE1234F1Z5" maxLength={15} style={{ fontFamily: 'var(--font-mono)' }} />
+                    </div>
+                    <div>
+                      <label className="label">State</label>
+                      <select className="input checkout-input" value={bill.billingStateCode} onChange={e => setBill({ ...bill, billingStateCode: e.target.value })} style={{ cursor: 'pointer' }}>
+                        <option value="">Select state…</option>
+                        {Object.entries(GST_STATES).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className="label">ZIP / Postal code</label>
-                      <input className="input checkout-input" placeholder="10001" />
+                    <div style={{ gridColumn: '1/-1' }}>
+                      <label className="label">Billing address</label>
+                      <textarea className="input checkout-input" rows={3} value={bill.billingAddress} onChange={e => setBill({ ...bill, billingAddress: e.target.value })} maxLength={500} placeholder="Street, city, PIN code" style={{ resize: 'vertical' }} />
                     </div>
                   </div>
                 </div>
@@ -387,6 +423,18 @@ function CheckoutForm() {
                       <span style={{ color: 'var(--text-secondary)' }}>Duration</span>
                       <span>{daysValid ? days : '—'} days</span>
                     </div>
+                    {amounts.rate > 0 ? (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Subtotal{gstSetting.inclusive ? ' (excl. GST)' : ''}</span>
+                          <span>₹{(amounts.basePaise / 100).toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>GST @ {amounts.rate}%{gstSetting.inclusive ? ' (included)' : ''}</span>
+                          <span>₹{(amounts.gstPaise / 100).toFixed(2)}</span>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 
@@ -395,7 +443,7 @@ function CheckoutForm() {
                   <span style={{ fontWeight: 600, fontSize: 15 }}>Total today</span>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color }}>₹{total.toFixed(2)}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>₹{perDay.toFixed(2)} × {daysValid ? days : '—'} days</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>₹{perDay.toFixed(2)} × {daysValid ? days : '—'} days{amounts.rate > 0 && !gstSetting.inclusive ? ' + GST' : ''}</div>
                   </div>
                 </div>
 

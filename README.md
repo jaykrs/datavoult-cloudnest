@@ -263,6 +263,16 @@ The app uses a custom CSS design system defined in `globals.css`:
 
 ---
 
+## 🧾 GST & Invoices
+
+- **Per-product GST** (Admin → Products): set a **GST rate** or leave it blank for **no GST**; choose whether the listed price **includes GST** or GST is **added on top**; optionally set a **SAC code** (default 998315). Checkout shows the breakdown and the server charges exactly that total (`price × days`, plus GST when added on top).
+- **Automatic invoices**: an invoice is created as soon as a payment is confirmed — Razorpay, UPI or bank-transfer approval, and renewals alike. Products without GST get a plain **Invoice**; products with GST get a **Tax Invoice** with taxable value and **CGST + SGST** (customer in the seller's state, or no state given) or **IGST** (customer in another state).
+- Numbers are sequential per Indian financial year and within GST's 16-character limit (e.g. `DV2627-000042`). The tax split is snapshotted at payment time, so later price/GST changes never alter an issued invoice.
+- Customers add name, GSTIN (optional), address and state at checkout; view/print invoices from **Billing** (print → *Save as PDF*) and get an email when it's issued. Admins can open any invoice from **Admin → Payments**.
+- **Setup**: set `SELLER_NAME`, `SELLER_ADDRESS` and (if you charge GST) `SELLER_GSTIN` — see `.env.example`. Until then invoices aren't issued; they are generated automatically the next time the payment is looked at once configured.
+
+---
+
 ## 🔐 Security Features
 
 - **HttpOnly, SameSite, `Secure` (in production) JWT cookies**; `JWT_SECRET` is mandatory, with no fallback

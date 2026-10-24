@@ -107,3 +107,26 @@ export async function notifyManualPaymentReviewed(requestId: string, approved: b
     console.error('[notify] manual payment reviewed', (e as Error).message);
   }
 }
+
+/** Email the customer that their invoice is ready. Never throws. */
+export async function notifyInvoiceIssued(invoiceId: string): Promise<void> {
+  try {
+    const inv = await prisma.invoice.findUnique({ where: { id: invoiceId }, include: { user: true } });
+    if (!inv) return;
+    const base = (process.env.APP_URL || '').replace(/\/$/, '');
+    await deliver([
+      sendMail({
+        to: inv.user.email,
+        ...tpl.invoiceIssuedEmail({
+          userName: inv.user.name,
+          number: inv.number,
+          total: formatINR(inv.total.toNumber()),
+          hasGst: inv.gstRate.toNumber() > 0,
+          link: base ? `${base}/invoices/${inv.paymentId}` : null,
+        }),
+      }),
+    ]);
+  } catch (e) {
+    console.error('[notify] invoice', (e as Error).message);
+  }
+}

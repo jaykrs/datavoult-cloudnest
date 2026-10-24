@@ -88,6 +88,13 @@ export const rejectManualPaymentSchema = z.object({
   reason: z.string().trim().min(3, 'Please give a reason').max(190),
 });
 
+export const billingProfileSchema = z.object({
+  billingName: z.string().trim().max(150).optional().nullable(),
+  billingGstin: z.string().trim().toUpperCase().max(15).optional().nullable(),
+  billingAddress: z.string().trim().max(500).optional().nullable(),
+  billingStateCode: z.string().trim().regex(/^\d{2}$/, 'Choose a state').optional().nullable(),
+});
+
 export const contactStatusSchema = z.object({ status: z.enum(['NEW', 'READ', 'RESOLVED']) });
 
 export const createProductSchema = z.object({
@@ -100,6 +107,14 @@ export const createProductSchema = z.object({
   imageUrl: z.string().url().optional(),
   /** Units available. null/omitted = unlimited (not tracked). 0 = sold out. */
   inventoryCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
+  /** GST % charged on this product (0–28, max 2 decimals). null = no GST. */
+  gstRate: z.number().min(0).max(28)
+    .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'GST rate can have at most 2 decimals')
+    .nullable().optional(),
+  /** true: listed price includes GST; false: GST is added on top. */
+  gstInclusive: z.boolean().optional(),
+  /** GST service accounting code (4–8 digits) shown on invoices. */
+  sacCode: z.string().trim().regex(/^\d{4,8}$/, 'SAC code must be 4–8 digits').nullable().optional(),
 });
 
 export const createPlanSchema = z.object({

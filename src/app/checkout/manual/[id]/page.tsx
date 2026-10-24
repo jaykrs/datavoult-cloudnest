@@ -147,7 +147,7 @@ export default function ManualPaymentPage() {
               <b style={{ fontSize: 15 }}>Send exactly ₹{ins.amount.toFixed(2)}</b>
             </div>
             <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 8 }}>
-              Put the reference below in the payment remark so we can match it. Amount = ₹{req.plan?.pricePerDay.toFixed(2)} × {req.days} days.
+              Put the reference below in the payment remark so we can match it. Amount payable for {req.days} days at ₹{req.plan?.pricePerDay.toFixed(2)}/day, including any applicable GST.
             </p>
             <CopyRow label="Amount (₹)" value={ins.amount.toFixed(2)} strong />
             <CopyRow label="Reference / remark" value={ins.reference} strong />

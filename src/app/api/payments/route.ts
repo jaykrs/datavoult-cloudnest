@@ -17,6 +17,7 @@ export async function GET(req: NextRequest) {
         select: {
           ...publicPaymentFields,
           subscription: { include: { product: true, plan: true } },
+          invoice: { select: { number: true } },
         },
         skip,
         take: limit,

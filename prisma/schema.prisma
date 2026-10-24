@@ -20,12 +20,19 @@ model User {
   isVerified    Boolean  @default(false)
   /// When the user accepted the Privacy Policy at sign-up (consent record). Null for accounts created before it was asked.
   privacyAcceptedAt DateTime?
+  /// Billing details for invoices (all optional; GSTIN only if the customer is GST-registered).
+  billingName      String?
+  billingGstin     String?
+  billingAddress   String?  @db.Text
+  /// GST state code (e.g. "29") of the customer, used for CGST+SGST vs IGST.
+  billingStateCode String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   subscriptions Subscription[]
   payments      Payment[]
   paymentRequests PaymentRequest[]
+  invoices      Invoice[]
   sessions      Session[]
   supportTickets SupportTicket[]
 
@@ -54,6 +61,12 @@ model Product {
   features    Json
   specs       Json
   imageUrl    String?
+  /// GST percentage charged on this product; NULL = no GST.
+  gstRate        Decimal? @db.Decimal(5, 2)
+  /// true: listed prices already include GST. false: GST is added on top at checkout.
+  gstInclusive   Boolean  @default(true)
+  /// GST service accounting code shown on invoices (defaults to 998315 in the app).
+  sacCode        String?
   /// Units left to sell. NULL = not tracked (unlimited). Each new subscription
   /// uses one unit; at 0 the product is hidden from the public catalogue and
   /// cannot be bought.
@@ -172,6 +185,7 @@ model Payment {
 
   user         User          @relation(fields: [userId], references: [id])
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  invoice      Invoice?
 
   @@map("payments")
 }
@@ -214,6 +228,51 @@ model PaymentRequest {
   @@index([userId, status])
   @@index([transactionRef])
   @@map("payment_requests")
+}
+
+/// One invoice per completed payment (any method). Amounts are snapshots taken at
+/// payment time, so later price/GST/profile changes never alter an issued invoice.
+model Invoice {
+  id             String   @id @default(cuid())
+  /// Sequential per financial year, max 16 chars (GST rule), e.g. DV2627-000042.
+  number         String   @unique
+  /// Financial year label, e.g. 2026-27.
+  fy             String
+  paymentId      String   @unique
+  userId         String
+  subscriptionId String?
+  issuedAt       DateTime @default(now())
+  description    String
+  sacCode        String?
+  days           Int?
+  /// Value before GST.
+  taxableAmount  Decimal  @db.Decimal(10, 2)
+  /// 0 when the product carries no GST.
+  gstRate        Decimal  @db.Decimal(5, 2)
+  cgst           Decimal  @db.Decimal(10, 2)
+  sgst           Decimal  @db.Decimal(10, 2)
+  igst           Decimal  @db.Decimal(10, 2)
+  /// What the customer paid (equals the payment amount).
+  total          Decimal  @db.Decimal(10, 2)
+  placeOfSupply  String?
+  /// Seller and buyer details as they were when the invoice was issued.
+  seller         Json
+  buyer          Json
+  createdAt      DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([userId, issuedAt])
+  @@map("invoices")
+}
+
+/// Last invoice serial used per financial year (key like "2627"); gives gap-free numbering.
+model InvoiceCounter {
+  id         String @id
+  lastNumber Int
+
+  @@map("invoice_counters")
 }
 
 model SupportTicket {
