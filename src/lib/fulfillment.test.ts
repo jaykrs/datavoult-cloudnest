@@ -32,9 +32,9 @@ vi.mock('./notifications', () => ({ notifyOrderSubscribed }));
 import { fulfillPayment, FulfillmentError } from './fulfillment';
 
 // ── Fixtures ─────────────────────────────────────────────────────────────────
-const plan = { id: 'plan_1', productId: 'prod_1', price: { toNumber: () => 499 }, billingCycle: 'MONTHLY' };
-const notes = { userId: 'user_1', productId: 'prod_1', planId: 'plan_1' };
-const input = { orderId: 'order_1', paymentId: 'pay_1', amountPaise: 49900, method: 'UPI' as const, notes };
+const plan = { id: 'plan_1', productId: 'prod_1', price: { toNumber: () => 16 } }; // ₹16 per DAY
+const notes = { userId: 'user_1', productId: 'prod_1', planId: 'plan_1', days: 30 };
+const input = { orderId: 'order_1', paymentId: 'pay_1', amountPaise: 48000, method: 'UPI' as const, notes };
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -191,5 +191,51 @@ describe('fulfillPayment — inventory', () => {
   it('sends the order notification for new subscriptions only', async () => {
     await fulfillPayment(input);
     expect(notifyOrderSubscribed).toHaveBeenCalledWith('sub_new');
+  });
+});
+
+describe('fulfillPayment — per-day pricing', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+
+  it('accepts exactly price-per-day × days and records that amount', async () => {
+    await fulfillPayment({ ...input, amountPaise: 1600 * 45, notes: { ...notes, days: 45 } });
+    expect(db.payment.create.mock.calls[0][0].data.amount).toBe('720.00');
+    expect(db.payment.create.mock.calls[0][0].data.gatewayData.days).toBe(45);
+  });
+
+  it('rejects a payment for a different number of days than the order says', async () => {
+    const err = await fulfillPayment({ ...input, amountPaise: 1600 * 30, notes: { ...notes, days: 60 } }).catch((e) => e);
+    expect(err).toBeInstanceOf(FulfillmentError);
+    expect(err.code).toBe('AMOUNT_MISMATCH');
+  });
+
+  it('refuses orders under the 30-day minimum even if the amount matches', async () => {
+    await expect(fulfillPayment({ ...input, amountPaise: 1600 * 10, notes: { ...notes, days: 10 } })).rejects.toThrow(/Minimum order is 30 days/);
+  });
+
+  it('starts a new subscription for exactly the purchased days', async () => {
+    const before = Date.now();
+    await fulfillPayment({ ...input, amountPaise: 1600 * 90, notes: { ...notes, days: 90 } });
+    const renewsAt: Date = db.subscription.create.mock.calls[0][0].data.renewsAt;
+    expect(renewsAt.getTime() - before).toBeGreaterThanOrEqual(90 * DAY - 1000);
+    expect(renewsAt.getTime() - before).toBeLessThan(90 * DAY + 5000);
+  });
+
+  it('records a manual (UPI / bank transfer) payment with its audit data', async () => {
+    await fulfillPayment({
+      ...input, orderId: 'DV-ABC', paymentId: 'manual:req_1', method: 'BANK_TRANSFER',
+      gateway: 'manual', gatewayExtra: { approvedBy: 'admin_1', transactionRef: 'UTR123' },
+    });
+    const data = db.payment.create.mock.calls[0][0].data;
+    expect(data.method).toBe('BANK_TRANSFER');
+    expect(data.gatewayId).toBe('manual:req_1');
+    expect(data.gatewayData).toMatchObject({ gateway: 'manual', approvedBy: 'admin_1', transactionRef: 'UTR123', days: 30 });
+  });
+
+  it('approving the same manual payment twice grants nothing new', async () => {
+    db.payment.findUnique.mockResolvedValue({ subscriptionId: 'sub_new' });
+    const r = await fulfillPayment({ ...input, paymentId: 'manual:req_1', gateway: 'manual' });
+    expect(r).toEqual({ outcome: 'duplicate', subscriptionId: 'sub_new' });
+    expect(db.subscription.create).not.toHaveBeenCalled();
   });
 });

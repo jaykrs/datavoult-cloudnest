@@ -83,3 +83,58 @@ export function adminContactEmail(c: { name: string; email: string; subject: str
     ),
   };
 }
+
+export interface ManualPaymentInfo {
+  userName: string;
+  userEmail: string;
+  productName: string;
+  planName: string;
+  days: number;
+  amount: string;
+  reference: string;
+  method: string;
+  transactionRef?: string | null;
+  reason?: string | null;
+}
+
+export function adminManualPaymentSubmittedEmail(m: ManualPaymentInfo): Email {
+  return {
+    subject: `Payment to verify: ${m.reference} (${m.amount})`,
+    text: `A customer says they paid by ${m.method}.\nReference: ${m.reference}\nAmount: ${m.amount}\nUTR/ref: ${m.transactionRef ?? '-'}\nCustomer: ${m.userName} <${m.userEmail}>\nOrder: ${m.productName} (${m.planName}) for ${m.days} days\n\nCheck your bank statement, then approve or reject in Admin > Payment requests.`,
+    html: layout(
+      'Payment to verify',
+      p(`<b>${escapeHtml(m.userName)}</b> &lt;${escapeHtml(m.userEmail)}&gt; says they paid by ${escapeHtml(m.method)}.`) +
+        p(`<b>Reference:</b> ${escapeHtml(m.reference)}<br><b>Amount:</b> ${escapeHtml(m.amount)}<br><b>UTR / bank ref:</b> ${escapeHtml(m.transactionRef ?? '-')}`) +
+        p(`<b>Order:</b> ${escapeHtml(m.productName)} (${escapeHtml(m.planName)}) for ${m.days} days`) +
+        p('Check your bank statement, then approve or reject it in Admin &rarr; Payment requests.'),
+    ),
+  };
+}
+
+export function manualPaymentApprovedEmail(m: ManualPaymentInfo): Email {
+  return {
+    subject: `Payment received: ${m.productName}`,
+    text: `Hi ${m.userName},\n\nWe received your payment of ${m.amount} (ref ${m.reference}). ${m.productName} (${m.planName}) is now active for ${m.days} days.\n\n— DataVoult`,
+    html: layout(
+      'Payment received',
+      p(`Hi ${escapeHtml(m.userName)},`) +
+        p(`We received your payment of <b>${escapeHtml(m.amount)}</b> (ref ${escapeHtml(m.reference)}).`) +
+        p(`<b>${escapeHtml(m.productName)}</b> (${escapeHtml(m.planName)}) is now active for ${m.days} days.`),
+    ),
+  };
+}
+
+export function manualPaymentRejectedEmail(m: ManualPaymentInfo): Email {
+  const reason = m.reason || 'We could not match the payment.';
+  return {
+    subject: `Payment could not be verified: ${m.reference}`,
+    text: `Hi ${m.userName},\n\nWe could not verify your payment (ref ${m.reference}, ${m.amount}).\nReason: ${reason}\n\nIf you have paid, please reply or use the contact page with your transaction reference.\n\n— DataVoult`,
+    html: layout(
+      'Payment could not be verified',
+      p(`Hi ${escapeHtml(m.userName)},`) +
+        p(`We could not verify your payment (ref ${escapeHtml(m.reference)}, ${escapeHtml(m.amount)}).`) +
+        p(`<b>Reason:</b> ${escapeHtml(reason)}`) +
+        p('If you have paid, please contact us with your transaction reference.'),
+    ),
+  };
+}

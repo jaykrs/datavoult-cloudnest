@@ -61,10 +61,10 @@ async function main() {
   await prisma.plan.createMany({
     skipDuplicates: true,
     data: [
-      { productId: vpsProduct.id, name: 'Starter', price: 5.99, billingCycle: 'MONTHLY', limits: { cpu: '1 vCPU', ram: '1 GB', storage: '25 GB SSD', bandwidth: '1 TB', snapshots: 1 } },
-      { productId: vpsProduct.id, name: 'Professional', price: 19.99, billingCycle: 'MONTHLY', isPopular: true, limits: { cpu: '2 vCPUs', ram: '4 GB', storage: '80 GB SSD', bandwidth: '4 TB', snapshots: 5 } },
-      { productId: vpsProduct.id, name: 'Business', price: 49.99, billingCycle: 'MONTHLY', limits: { cpu: '4 vCPUs', ram: '8 GB', storage: '160 GB SSD', bandwidth: '8 TB', snapshots: 10 } },
-      { productId: vpsProduct.id, name: 'Enterprise', price: 99.99, billingCycle: 'MONTHLY', limits: { cpu: '8 vCPUs', ram: '16 GB', storage: '320 GB SSD', bandwidth: 'Unlimited', snapshots: 20 } },
+      { productId: vpsProduct.id, name: 'Starter', price: 16.00, limits: { cpu: '1 vCPU', ram: '1 GB', storage: '25 GB SSD', bandwidth: '1 TB', snapshots: 1 } },
+      { productId: vpsProduct.id, name: 'Professional', price: 55.00, isPopular: true, limits: { cpu: '2 vCPUs', ram: '4 GB', storage: '80 GB SSD', bandwidth: '4 TB', snapshots: 5 } },
+      { productId: vpsProduct.id, name: 'Business', price: 140.00, limits: { cpu: '4 vCPUs', ram: '8 GB', storage: '160 GB SSD', bandwidth: '8 TB', snapshots: 10 } },
+      { productId: vpsProduct.id, name: 'Enterprise', price: 280.00, limits: { cpu: '8 vCPUs', ram: '16 GB', storage: '320 GB SSD', bandwidth: 'Unlimited', snapshots: 20 } },
     ],
   });
 
@@ -86,9 +86,9 @@ async function main() {
   await prisma.plan.createMany({
     skipDuplicates: true,
     data: [
-      { productId: dockerProduct.id, name: 'Developer', price: 9.99, billingCycle: 'MONTHLY', limits: { containers: 5, ram: '2 GB', storage: '10 GB', builds: 50 } },
-      { productId: dockerProduct.id, name: 'Team', price: 29.99, billingCycle: 'MONTHLY', isPopular: true, limits: { containers: 20, ram: '8 GB', storage: '50 GB', builds: 200 } },
-      { productId: dockerProduct.id, name: 'Scale', price: 79.99, billingCycle: 'MONTHLY', limits: { containers: 100, ram: '32 GB', storage: '200 GB', builds: 'Unlimited' } },
+      { productId: dockerProduct.id, name: 'Developer', price: 28.00, limits: { containers: 5, ram: '2 GB', storage: '10 GB', builds: 50 } },
+      { productId: dockerProduct.id, name: 'Team', price: 85.00, isPopular: true, limits: { containers: 20, ram: '8 GB', storage: '50 GB', builds: 200 } },
+      { productId: dockerProduct.id, name: 'Scale', price: 225.00, limits: { containers: 100, ram: '32 GB', storage: '200 GB', builds: 'Unlimited' } },
     ],
   });
 
@@ -110,9 +110,9 @@ async function main() {
   await prisma.plan.createMany({
     skipDuplicates: true,
     data: [
-      { productId: emailProduct.id, name: 'Solo', price: 2.99, billingCycle: 'MONTHLY', limits: { mailboxes: 1, storage: '5 GB', aliases: 5, domains: 1 } },
-      { productId: emailProduct.id, name: 'Business', price: 7.99, billingCycle: 'MONTHLY', isPopular: true, limits: { mailboxes: 10, storage: '50 GB', aliases: 50, domains: 3 } },
-      { productId: emailProduct.id, name: 'Enterprise', price: 24.99, billingCycle: 'MONTHLY', limits: { mailboxes: 'Unlimited', storage: '500 GB', aliases: 'Unlimited', domains: 10 } },
+      { productId: emailProduct.id, name: 'Solo', price: 8.00, limits: { mailboxes: 1, storage: '5 GB', aliases: 5, domains: 1 } },
+      { productId: emailProduct.id, name: 'Business', price: 22.00, isPopular: true, limits: { mailboxes: 10, storage: '50 GB', aliases: 50, domains: 3 } },
+      { productId: emailProduct.id, name: 'Enterprise', price: 70.00, limits: { mailboxes: 'Unlimited', storage: '500 GB', aliases: 'Unlimited', domains: 10 } },
     ],
   });
 

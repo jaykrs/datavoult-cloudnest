@@ -31,7 +31,7 @@ export async function notifyOrderSubscribed(subscriptionId: string): Promise<voi
   try {
     const sub = await prisma.subscription.findUnique({
       where: { id: subscriptionId },
-      include: { user: true, product: true, plan: true },
+      include: { user: true, product: true, plan: true, payments: { orderBy: { createdAt: 'desc' }, take: 1 } },
     });
     if (!sub) return;
     const info: tpl.OrderInfo = {
@@ -39,7 +39,8 @@ export async function notifyOrderSubscribed(subscriptionId: string): Promise<voi
       userEmail: sub.user.email,
       productName: sub.product.name,
       planName: sub.plan.name,
-      amount: formatINR(sub.plan.price.toNumber()),
+      // The plan price is per day; what the customer actually paid is on the payment.
+      amount: formatINR((sub.payments[0]?.amount ?? sub.plan.price).toNumber()),
       subscriptionId: sub.id,
     };
     const jobs = [sendMail({ to: info.userEmail, ...tpl.orderConfirmationEmail(info) })];
@@ -59,5 +60,50 @@ export async function notifyContactMessage(c: { name: string; email: string; sub
     await deliver([sendMail({ to: admins, replyTo: c.email, ...tpl.adminContactEmail(c) })]);
   } catch (e) {
     console.error('[notify] contact', (e as Error).message);
+  }
+}
+
+async function manualInfo(requestId: string): Promise<tpl.ManualPaymentInfo | null> {
+  const r = await prisma.paymentRequest.findUnique({
+    where: { id: requestId },
+    include: { user: true, product: true, plan: true },
+  });
+  if (!r) return null;
+  return {
+    userName: r.user.name,
+    userEmail: r.user.email,
+    productName: r.product.name,
+    planName: r.plan.name,
+    days: r.days,
+    amount: formatINR(r.amount.toNumber()),
+    reference: r.reference,
+    method: r.method === 'UPI' ? 'UPI' : 'bank transfer',
+    transactionRef: r.transactionRef,
+    reason: r.reviewNote,
+  };
+}
+
+/** Tell admins a customer reported an offline payment that needs checking. Never throws. */
+export async function notifyManualPaymentSubmitted(requestId: string): Promise<void> {
+  try {
+    const admins = adminRecipients();
+    if (!admins.length) return;
+    const info = await manualInfo(requestId);
+    if (!info) return;
+    await deliver([sendMail({ to: admins, ...tpl.adminManualPaymentSubmittedEmail(info) })]);
+  } catch (e) {
+    console.error('[notify] manual payment submitted', (e as Error).message);
+  }
+}
+
+/** Tell the customer their offline payment was approved or rejected. Never throws. */
+export async function notifyManualPaymentReviewed(requestId: string, approved: boolean): Promise<void> {
+  try {
+    const info = await manualInfo(requestId);
+    if (!info) return;
+    const mail = approved ? tpl.manualPaymentApprovedEmail(info) : tpl.manualPaymentRejectedEmail(info);
+    await deliver([sendMail({ to: info.userEmail, ...mail })]);
+  } catch (e) {
+    console.error('[notify] manual payment reviewed', (e as Error).message);
   }
 }

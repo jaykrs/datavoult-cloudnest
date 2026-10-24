@@ -8,7 +8,7 @@ interface User { name: string; email: string; role: string; }
 interface AdminPayment {
   id: string; amount: number; currency: string; status: string; method: string; createdAt: string;
   user: { name: string; email: string };
-  subscription?: { product: { name: string }; plan: { name: string; billingCycle: string } };
+  subscription?: { product: { name: string }; plan: { name: string } };
 }
 
 const statusIcon: Record<string, React.ReactNode> = {

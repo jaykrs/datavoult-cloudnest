@@ -254,6 +254,15 @@ The app uses a custom CSS design system defined in `globals.css`:
 
 ---
 
+## 💳 Pricing & Payments
+
+- **Per-day pricing in ₹**: a plan's price is the cost of **one day**. Customers choose a number of days (**minimum 30**, maximum 1095) at checkout and pay `price × days`. The total is always computed on the server in integer paise (`src/lib/pricing.ts`); the browser never sends an amount. The subscription runs for exactly the purchased days, and renewals add days from the later of "now" and the current end date.
+- **Payment methods**: Razorpay (cards, UPI, netbanking, wallets — instant) plus **UPI** and **bank transfer** to your account. For the offline methods the customer gets a unique reference (`DV-XXXXXXXX`) and your payment details, pays, then enters the UTR. Set the account in `.env` (`BANK_*`, `UPI_*`); a method is hidden until configured.
+- **Admin approval**: **Admin → Bank/UPI payments** lists requests waiting for verification. Check your bank statement, type the amount you actually received (it must equal the order to the paisa), and approve — the subscription is created, stock decremented and emails sent exactly as for an online payment. Reject with a reason to notify the customer. Duplicate UTRs are flagged. Requests expire after 72 hours if unpaid.
+- **Upgrading from monthly plans**: the migration converts each existing plan's price to a per-day rate (monthly ÷ 30, quarterly ÷ 90, annual ÷ 365, rounded to paise) and drops the billing cycle. **Review prices in Admin → Products after migrating.**
+
+---
+
 ## 🔐 Security Features
 
 - **HttpOnly, SameSite, `Secure` (in production) JWT cookies**; `JWT_SECRET` is mandatory, with no fallback

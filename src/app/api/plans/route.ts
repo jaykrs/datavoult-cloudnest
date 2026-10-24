@@ -19,7 +19,6 @@ export async function POST(req: NextRequest) {
         name: data.name,
         description: data.description,
         price: data.price,
-        billingCycle: data.billingCycle,
         isPopular: data.isPopular,
         limits: data.limits as object,
       },

@@ -4,7 +4,7 @@ import AdminSidebar from '@/components/admin/AdminSidebar';
 import { Plus, Edit2, Trash2, Server, Package, Mail, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Save, X, Eye, Edit3, Bold, Italic, List, Link as LinkIcon, Code, AlignLeft, Heading1, Heading2 } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
-interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
+interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
 interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; plans: Plan[]; createdAt: string; }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={16} />, DOCKER: <Package size={16} />, EMAIL: <Mail size={16} /> };
@@ -131,7 +131,7 @@ export default function AdminProductsPage() {
   const [descDraft, setDescDraft] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
   const [showPlanForm, setShowPlanForm] = useState<string | null>(null);
-  const [planForm, setPlanForm] = useState({ name: '', price: '', billingCycle: 'MONTHLY', isPopular: false, description: '', limitsRaw: '{}' });
+  const [planForm, setPlanForm] = useState({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}' });
 
   // ============================================
   // DEVELOPER: @Simran Samir : UPDATE PLAN FEATURE - NEW STATE VARIABLES
@@ -141,7 +141,6 @@ export default function AdminProductsPage() {
   const [editPlanForm, setEditPlanForm] = useState({ 
     name: '', 
     price: '', 
-    billingCycle: 'MONTHLY', 
     isPopular: false, 
     description: '', 
     limitsRaw: '{}' 
@@ -222,14 +221,13 @@ export default function AdminProductsPage() {
           name: planForm.name,
           description: planForm.description || undefined,
           price: parseFloat(planForm.price),
-          billingCycle: planForm.billingCycle,
           isPopular: planForm.isPopular,
           limits,
         }),
       });
       if (res.ok) {
         setShowPlanForm(null);
-        setPlanForm({ name: '', price: '', billingCycle: 'MONTHLY', isPopular: false, description: '', limitsRaw: '{}' });
+        setPlanForm({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}' });
         loadProducts();
       } else { const d = await res.json(); alert(d.error || 'Failed'); }
     } catch (err) { alert('Error creating plan'); }
@@ -261,7 +259,6 @@ export default function AdminProductsPage() {
           name: editPlanForm.name,
           description: editPlanForm.description || undefined,
           price: parseFloat(editPlanForm.price),
-          billingCycle: editPlanForm.billingCycle,
           isPopular: editPlanForm.isPopular,
           limits,
         }),
@@ -272,8 +269,7 @@ export default function AdminProductsPage() {
         setEditPlanForm({ 
           name: '', 
           price: '', 
-          billingCycle: 'MONTHLY', 
-          isPopular: false, 
+                isPopular: false, 
           description: '', 
           limitsRaw: '{}' 
         });
@@ -296,7 +292,6 @@ export default function AdminProductsPage() {
     setEditPlanForm({
       name: plan.name,
       price: plan.price.toString(),
-      billingCycle: plan.billingCycle,
       isPopular: plan.isPopular,
       description: plan.description || '',
       limitsRaw: JSON.stringify(plan.limits, null, 2),
@@ -402,7 +397,7 @@ export default function AdminProductsPage() {
                         {product.plans.length} plan{product.plans.length !== 1 ? 's' : ''}
                         {product.plans.length > 0 && (
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                            from ₹{Math.min(...product.plans.map(p => Number(p.price))).toFixed(2)}/mo
+                            from ₹{Math.min(...product.plans.map(p => Number(p.price))).toFixed(2)}/day
                           </div>
                         )}
                       </div>
@@ -472,16 +467,8 @@ export default function AdminProductsPage() {
                                   <input className="input" value={planForm.name} onChange={e => setPlanForm(f => ({ ...f, name: e.target.value }))} placeholder="Professional" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div>
-                                  <label className="label">Price (USD/mo)</label>
-                                  <input className="input" type="number" step="0.01" min="0" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="19.99" required style={{ fontSize: 13 }} />
-                                </div>
-                                <div>
-                                  <label className="label">Billing Cycle</label>
-                                  <select className="input" value={planForm.billingCycle} onChange={e => setPlanForm(f => ({ ...f, billingCycle: e.target.value }))} style={{ cursor: 'pointer', fontSize: 13 }}>
-                                    <option value="MONTHLY">Monthly</option>
-                                    <option value="QUARTERLY">Quarterly</option>
-                                    <option value="ANNUAL">Annual</option>
-                                  </select>
+                                  <label className="label">Price per day (₹)</label>
+                                  <input className="input" type="number" step="0.01" min="0" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="16.50" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
                                   <label className="label">Description (optional)</label>
@@ -520,16 +507,8 @@ export default function AdminProductsPage() {
                                   <input className="input" value={editPlanForm.name} onChange={e => setEditPlanForm(f => ({ ...f, name: e.target.value }))} placeholder="Professional" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div>
-                                  <label className="label">Price (USD/mo)</label>
-                                  <input className="input" type="number" step="0.01" min="0" value={editPlanForm.price} onChange={e => setEditPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="19.99" required style={{ fontSize: 13 }} />
-                                </div>
-                                <div>
-                                  <label className="label">Billing Cycle</label>
-                                  <select className="input" value={editPlanForm.billingCycle} onChange={e => setEditPlanForm(f => ({ ...f, billingCycle: e.target.value }))} style={{ cursor: 'pointer', fontSize: 13 }}>
-                                    <option value="MONTHLY">Monthly</option>
-                                    <option value="QUARTERLY">Quarterly</option>
-                                    <option value="ANNUAL">Annual</option>
-                                  </select>
+                                  <label className="label">Price per day (₹)</label>
+                                  <input className="input" type="number" step="0.01" min="0" value={editPlanForm.price} onChange={e => setEditPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="16.50" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
                                   <label className="label">Description (optional)</label>
@@ -564,7 +543,7 @@ export default function AdminProductsPage() {
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                     <div>
                                       <div style={{ fontWeight: 600, fontSize: 13 }}>{plan.name}</div>
-                                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{plan.billingCycle}</div>
+                                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>per day · min 30 days</div>
                                     </div>
                                     {plan.isPopular && <span style={{ fontSize: 10, background: 'var(--accent)', color: 'white', padding: '1px 4px', borderRadius: 100, fontWeight: 600 }}>Popular</span>}
                                    {/* ============================================ */}
@@ -594,7 +573,7 @@ export default function AdminProductsPage() {
                                   
 
                                   </div>
-                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>₹{Number(plan.price).toFixed(2)}</div>
+                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>₹{Number(plan.price).toFixed(2)}<span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/day</span></div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                     {Object.entries(plan.limits).slice(0, 4).map(([k, v]) => (
                                       <div key={k} style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>

@@ -8,7 +8,7 @@ interface ServiceConfig { hostname?: string; ipAddress?: string; region?: string
 interface Subscription {
   id: string; status: string;
   product: { name: string; category: string };
-  plan: { name: string; price: number; billingCycle: string };
+  plan: { name: string; price: number };
   serviceConfig?: ServiceConfig;
   renewsAt?: string;
 }
@@ -69,7 +69,7 @@ function SuccessContent() {
                 <h2 style={{ fontWeight: 700, fontSize: 18, marginBottom: 2 }}>{subscription.product.name}</h2>
                 <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
                   <span className={`badge badge-${subscription.product.category.toLowerCase()}`}>{subscription.product.category}</span>
-                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{subscription.plan.name} · ₹{subscription.plan.price}/mo</span>
+                  <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>{subscription.plan.name} · ₹{Number(subscription.plan.price).toFixed(2)}/day</span>
                 </div>
               </div>
               <span className={`badge badge-${subscription.status === 'ACTIVE' ? 'active' : 'pending'}`} style={{ marginLeft: 'auto' }}>{subscription.status}</span>

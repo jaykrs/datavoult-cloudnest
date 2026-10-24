@@ -2,13 +2,14 @@
 import { useEffect, useState } from 'react';
 import DashboardSidebar from '@/components/dashboard/Sidebar';
 import Pagination from '@/components/ui/Pagination';
+import Link from 'next/link';
 import { CreditCard, Download, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
 interface Payment {
   id: string; amount: number; currency: string; status: string;
   method: string; createdAt: string;
-  subscription?: { product: { name: string }; plan: { name: string; billingCycle: string } };
+  subscription?: { product: { name: string }; plan: { name: string } };
 }
 
 const statusIcon: Record<string, React.ReactNode> = {
@@ -17,6 +18,7 @@ const statusIcon: Record<string, React.ReactNode> = {
   PENDING:   <Clock      size={14} color="var(--amber)" />,
 };
 
+interface ManualReq { id: string; reference: string; status: string; method: string; days: number; amount: number; product?: { name: string } }
 const LIMIT = 8;
 
 export default function BillingPage() {
@@ -27,11 +29,17 @@ export default function BillingPage() {
   const [total,      setTotal]      = useState(0);
   const [totalSpend, setTotalSpend] = useState(0);
   const [monthSpend, setMonthSpend] = useState(0);
+  const [manual,     setManual]     = useState<ManualReq[]>([]);
 
   /* first load: fetch all for summary figures */
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
     if (stored) try { setUser(JSON.parse(stored)); } catch {}
+
+    // UPI / bank-transfer orders that are still waiting on the customer or on us.
+    fetch('/api/payments/manual').then(r => r.json())
+      .then(d => setManual((d.data?.requests || []).filter((r: ManualReq) => r.status === 'AWAITING_PAYMENT' || r.status === 'SUBMITTED')))
+      .catch(() => {});
 
     fetch('/api/payments?limit=200')
       .then(r => r.json())
@@ -72,6 +80,17 @@ export default function BillingPage() {
         </div>
 
         <div className="page-content">
+          {manual.length > 0 && (
+            <div style={{ background: 'var(--bg-card)', border: '1px solid rgba(245,158,11,0.35)', borderRadius: 'var(--radius-lg)', padding: 20 }}>
+              <div style={{ fontWeight: 600, marginBottom: 10 }}>Bank / UPI payments in progress</div>
+              {manual.map(m => (
+                <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '8px 0', fontSize: 13 }}>
+                  <span>{m.product?.name} · {m.days} days · ₹{Number(m.amount).toFixed(2)} · <span style={{ fontFamily: 'var(--font-mono)' }}>{m.reference}</span></span>
+                  <Link href={`/checkout/manual/${m.id}`} className="btn btn-secondary btn-sm">{m.status === 'SUBMITTED' ? 'View status' : 'Complete payment'}</Link>
+                </div>
+              ))}
+            </div>
+          )}
           {/* Summary cards */}
           <div className="billing-grid">
             {[
@@ -127,7 +146,7 @@ export default function BillingPage() {
                           {p.subscription ? (
                             <>
                               <div style={{ fontWeight: 500, fontSize: 13 }}>{p.subscription.product.name}</div>
-                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.subscription.plan.name} · {p.subscription.plan.billingCycle}</div>
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{p.subscription.plan.name}</div>
                             </>
                           ) : '—'}
                         </td>

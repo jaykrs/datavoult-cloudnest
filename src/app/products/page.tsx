@@ -12,8 +12,8 @@ import { Server, Package, Mail, Check, ArrowRight, Star } from 'lucide-react';
 interface Plan {
   id: string;
   name: string;
+  /** ₹ per day */
   price: number;
-  billingCycle: string;
   isPopular: boolean;
   limits: Record<string, string>;
 }
@@ -161,8 +161,8 @@ function ProductsList() {
                           <div style={{ fontWeight: 600, marginBottom: 4 }}>{plan.name}</div>
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 12 }}>
                             {/* Updated to Indian Rupee Symbol */}
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 28 }}>₹{plan.price}</span>
-                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/mo</span>
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 28 }}>₹{Number(plan.price).toFixed(2)}</span>
+                            <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/day · min 30 days</span>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: 4, marginBottom: 16 }}>
                             {Object.entries(plan.limits).slice(0, 4).map(([k, v]) => (

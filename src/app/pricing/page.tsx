@@ -4,12 +4,12 @@ import Link from 'next/link';
 import Navbar from '@/components/marketing/Navbar';
 import { Check, ArrowRight, Star } from 'lucide-react';
 
-interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string>; }
+/** `price` = ₹ per day. */
+interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string>; }
 interface Product { id: string; name: string; slug: string; category: string; plans: Plan[]; features: string[]; }
 
 export default function PricingPage() {
   const [products, setProducts] = useState<Product[]>([]);
-  const [billing, setBilling] = useState<'MONTHLY' | 'ANNUAL'>('MONTHLY');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -37,15 +37,7 @@ export default function PricingPage() {
         <div style={{ paddingTop: 96 }}>
           <div style={{ padding: '56px 0 48px', textAlign: 'center', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)' }}>
             <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 'clamp(32px, 5vw, 56px)', marginBottom: 12 }}>Simple, transparent pricing</h1>
-            <p style={{ color: 'var(--text-secondary)', fontSize: 16, maxWidth: 500, margin: '0 auto 32px' }}>No hidden fees. No surprises. Pay only for what you use.</p>
-            <div style={{ display: 'inline-flex', background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 100, padding: 4, gap: 2 }}>
-              {(['MONTHLY', 'ANNUAL'] as const).map(b => (
-                <button key={b} onClick={() => setBilling(b)} style={{ padding: '8px 20px', borderRadius: 100, border: 'none', cursor: 'pointer', background: billing === b ? 'var(--accent)' : 'transparent', color: billing === b ? 'white' : 'var(--text-secondary)', fontSize: 14, fontWeight: 500, transition: 'all 0.2s' }}>
-                  {b === 'MONTHLY' ? 'Monthly' : 'Annual'}
-                  {b === 'ANNUAL' && <span style={{ fontSize: 11, marginLeft: 4, opacity: 0.8 }}>–20%</span>}
-                </button>
-              ))}
-            </div>
+            <p style={{ color: 'var(--text-secondary)', fontSize: 16, maxWidth: 500, margin: '0 auto 32px' }}>Simple per-day pricing in ₹. Choose how many days you need — minimum 30.</p>
           </div>
 
           <div className="container" style={{ padding: '48px 24px' }}>
@@ -71,7 +63,7 @@ export default function PricingPage() {
 
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 20 }}>
                         {product.plans.map(plan => {
-                          const displayPrice = billing === 'ANNUAL' ? Number(plan.price * 0.8) : Number(plan.price);
+                          const perDay = Number(plan.price);
                           return (
                             <div key={plan.id} className={`pricing-card ${catCls}`} style={{ background: plan.isPopular ? `linear-gradient(145deg, ${color}10, var(--bg-card))` : 'var(--bg-card)', border: plan.isPopular ? `1px solid ${color}44` : '1px solid var(--border)', borderRadius: 'var(--radius-xl)', padding: 28, position: 'relative' }}>
                               {plan.isPopular && (
@@ -81,14 +73,12 @@ export default function PricingPage() {
                               )}
                               <h3 style={{ fontSize: 18, fontWeight: 600, marginBottom: 6 }}>{plan.name}</h3>
                               <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginBottom: 6 }}>
-                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 40 }}>₹{displayPrice.toFixed(2)}</span>
-                                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>/mo</span>
+                                <span style={{ fontFamily: 'var(--font-display)', fontSize: 40 }}>₹{perDay.toFixed(2)}</span>
+                                <span style={{ fontSize: 13, color: 'var(--text-muted)' }}>/day</span>
                               </div>
-                              {billing === 'ANNUAL' && (
-                                <div style={{ fontSize: 12, color: 'var(--green)', marginBottom: 16 }}>
-                                  Save ₹{((plan.price - displayPrice) * 12).toFixed(2)}/yr
-                                </div>
-                              )}
+                              <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 16 }}>
+                                ₹{(perDay * 30).toFixed(2)} for the 30-day minimum
+                              </div>
                               <div style={{ height: 1, background: 'var(--border)', margin: '16px 0' }} />
                               <div style={{ display: 'flex', flexDirection: 'column', gap: 8, marginBottom: 24 }}>
                                 {Object.entries(plan.limits).map(([k, v]) => (

@@ -120,12 +120,11 @@ SELECT
   pr.category,
   pl.name           AS plan,
   pl.price,
-  pl.billingCycle,
   COUNT(s.id)       AS subscribers
 FROM plans pl
 JOIN products pr      ON pr.id = pl.productId
 LEFT JOIN subscriptions s ON s.planId = pl.id AND s.status IN ('ACTIVE','TRIAL')
-GROUP BY pl.id, pr.category, pl.name, pl.price, pl.billingCycle
+GROUP BY pl.id, pr.category, pl.name, pl.price
 ORDER BY subscribers DESC;
 
 -- ── 11. Login credentials reminder ───────────────────────────

@@ -60,6 +60,34 @@ export const contactSchema = z.object({
   website: z.string().max(500).optional(),
 });
 
+export const orderDaysField = z.number().int('Days must be a whole number');
+
+export const createManualPaymentSchema = z.object({
+  productId: z.string().min(1),
+  planId: z.string().min(1),
+  subscriptionId: z.string().min(1).optional(),
+  days: orderDaysField,
+  method: z.enum(['UPI', 'BANK_TRANSFER']),
+});
+
+/** Bank/UPI reference (UTR, RRN, IMPS/NEFT ref): letters, digits, - and _ only. */
+export const submitManualPaymentSchema = z.object({
+  transactionRef: z.string().trim().min(6, 'Enter the transaction / UTR number').max(40)
+    .regex(/^[A-Za-z0-9_-]+$/, 'The reference can only contain letters, numbers, - and _')
+    .transform((s) => s.toUpperCase()),
+  payerDetails: z.string().trim().max(150).optional(),
+});
+
+export const approveManualPaymentSchema = z.object({
+  /** Amount in INR the admin saw credited — must equal what was ordered. */
+  receivedAmount: z.number().positive(),
+  note: z.string().trim().max(190).optional(),
+});
+
+export const rejectManualPaymentSchema = z.object({
+  reason: z.string().trim().min(3, 'Please give a reason').max(190),
+});
+
 export const contactStatusSchema = z.object({ status: z.enum(['NEW', 'READ', 'RESOLVED']) });
 
 export const createProductSchema = z.object({
@@ -78,8 +106,9 @@ export const createPlanSchema = z.object({
   productId: z.string(),
   name: z.string().min(1),
   description: z.string().optional(),
-  price: z.number().min(0),
-  billingCycle: z.enum(['MONTHLY', 'QUARTERLY', 'ANNUAL']),
+  /** INR per DAY of service (max 2 decimals). */
+  price: z.number().positive('Price per day must be greater than 0').max(100_000)
+    .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'Price per day can have at most 2 decimals'),
   isPopular: z.boolean().default(false),
   limits: z.record(z.unknown()),
 });

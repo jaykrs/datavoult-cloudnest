@@ -101,7 +101,7 @@ export default function ServicesPage() {
                           <span className={`badge badge-${sub.status.toLowerCase()}`}>{sub.status}</span>
                         </div>
                         <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>
-                          {sub.plan.name} · ₹{sub.plan.price}/mo
+                          {sub.plan.name} · ₹{Number(sub.plan.price).toFixed(2)}/day
                           {sub.renewsAt && ` · Renews ${new Date(sub.renewsAt).toLocaleDateString()}`}
                         </div>
                       </div>
