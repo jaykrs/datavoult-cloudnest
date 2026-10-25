@@ -4,6 +4,8 @@ import { prisma } from '@/lib/prisma';
 import { signToken, createAuthResponse } from '@/lib/auth';
 import { apiError, registerSchema } from '@/lib/api';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
+import { verifyRecaptcha, recaptchaErrorResponse } from '@/lib/recaptcha';
+import { notifyUserSignedUp } from '@/lib/notifications';
 import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
@@ -14,7 +16,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { name, email, password } = registerSchema.parse(body);
+    const { name, email, password, recaptchaToken } = registerSchema.parse(body);
+
+    const captcha = await verifyRecaptcha(recaptchaToken, clientIp(req));
+    if (!captcha.ok) return recaptchaErrorResponse(captcha);
 
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return apiError('Email already in use', 409);
@@ -22,8 +27,10 @@ export async function POST(req: NextRequest) {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.user.create({
-      data: { name, email, passwordHash },
+      data: { name, email, passwordHash, privacyAcceptedAt: new Date() },
     });
+
+    await notifyUserSignedUp({ name: user.name, email: user.email });
 
     const token = await signToken({ userId: user.id, email: user.email, role: user.role });
 

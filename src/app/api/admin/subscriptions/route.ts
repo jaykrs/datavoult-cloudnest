@@ -22,7 +22,7 @@ export async function GET(req: NextRequest) {
         include: {
           user: { select: { id: true, name: true, email: true } },
           product: { select: { id: true, name: true, category: true } },
-          plan: { select: { id: true, name: true, price: true, billingCycle: true } },
+          plan: { select: { id: true, name: true, price: true } },
           provisioningJob: { select: { status: true, attempts: true, lastError: true, updatedAt: true } },
         },
         skip,

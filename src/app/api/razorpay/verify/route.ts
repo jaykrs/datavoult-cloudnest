@@ -87,6 +87,9 @@ export async function POST(req: NextRequest) {
     if (e instanceof FulfillmentError) {
       // Money was taken but we cannot grant the service: needs a human (and likely a refund).
       console.error('[razorpay/verify] FULFILMENT FAILED — manual review needed', e.code, e.message);
+      if (e.code === 'OUT_OF_STOCK') {
+        return apiError('This product just sold out, so we could not activate it. Your payment ID is on record and support will refund you — please contact us.', 409);
+      }
       return apiError('We received your payment but could not activate the service. Support has been alerted — please contact us with your payment ID.', 409);
     }
     console.error('[razorpay/verify]', e);

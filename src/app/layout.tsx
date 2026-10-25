@@ -1,5 +1,7 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import CookieConsent from '@/components/ui/CookieConsent';
+import Analytics from '@/components/ui/Analytics';
 
 export const metadata: Metadata = {
   title: 'DataVoult — Cloud Infrastructure',
@@ -9,7 +11,11 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="noise">
-      <body>{children}</body>
+      <body>
+        {children}
+        <Analytics />
+        <CookieConsent />
+      </body>
     </html>
   );
 }

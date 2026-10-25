@@ -5,6 +5,7 @@ import { prisma } from '@/lib/prisma';
 import { signToken, createAuthResponse } from '@/lib/auth';
 import { apiError, loginSchema } from '@/lib/api';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
+import { verifyRecaptcha, recaptchaErrorResponse } from '@/lib/recaptcha';
 import { z } from 'zod';
 
 // Real bcrypt hash (same cost as user hashes) of a random value, compared
@@ -25,7 +26,10 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
-    const { email, password } = loginSchema.parse(body);
+    const { email, password, recaptchaToken } = loginSchema.parse(body);
+
+    const captcha = await verifyRecaptcha(recaptchaToken, ip);
+    if (!captcha.ok) return recaptchaErrorResponse(captcha);
 
     const accountLimit = rateLimit(`login:acct:${email.toLowerCase()}`, 10, 15 * 60_000);
     if (!accountLimit.allowed) {

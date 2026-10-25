@@ -1,19 +1,23 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError, createProductSchema, getPaginationParams, buildPaginationMeta } from '@/lib/api';
-import { requireAdmin } from '@/lib/auth';
+import { requireAdmin, getSession } from '@/lib/auth';
+import { publicInStockWhere, serializeProduct } from '@/lib/inventory';
 import { z } from 'zod';
 
 export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const category = url.searchParams.get('category');
-    const status = url.searchParams.get('status') || 'ACTIVE';
+    const isAdmin = (await getSession())?.role === 'ADMIN';
+    // Visitors only ever see live, in-stock products; admins can ask for everything.
+    const status = isAdmin ? url.searchParams.get('status') || 'ACTIVE' : 'ACTIVE';
     const { page, limit, skip } = getPaginationParams(req);
 
     const where = {
       ...(category && { category: category as 'VPS' | 'DOCKER' | 'EMAIL' }),
       ...(status !== 'all' && { status: status as 'ACTIVE' | 'INACTIVE' | 'COMING_SOON' }),
+      ...(!isAdmin && publicInStockWhere),
     };
 
   const [products, total] = await Promise.all([
@@ -29,7 +33,7 @@ export async function GET(req: NextRequest) {
   prisma.product.count({ where }),
 ]);
 
-    return apiSuccess({ products, meta: buildPaginationMeta(total, page, limit) });
+    return apiSuccess({ products: products.map((p) => serializeProduct(p, isAdmin)), meta: buildPaginationMeta(total, page, limit) });
   } catch {
     return apiError('Internal server error', 500);
   }
@@ -50,7 +54,7 @@ export async function POST(req: NextRequest) {
       include: { plans: { where: { isDeleted: false } } },
     });
 
-    return apiSuccess({ product }, 201);
+    return apiSuccess({ product: serializeProduct(product, true) }, 201);
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     if ((e as Error).message === 'FORBIDDEN') return apiError('Forbidden', 403);

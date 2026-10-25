@@ -1,8 +1,10 @@
 'use client';
-import { useState, Suspense } from 'react';
+import { useState, useRef, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Database, Eye, EyeOff, ArrowRight, Check } from 'lucide-react';
+import Recaptcha, { RECAPTCHA_SITE_KEY, type RecaptchaHandle } from '@/components/ui/Recaptcha';
+import { trackEvent } from '@/lib/analytics';
 
 function RegisterForm() {
   const [name,     setName]     = useState('');
@@ -11,6 +13,9 @@ function RegisterForm() {
   const [showPass, setShowPass] = useState(false);
   const [loading,  setLoading]  = useState(false);
   const [error,    setError]    = useState('');
+  const [acceptPrivacy, setAcceptPrivacy] = useState(false);
+  const [captcha,  setCaptcha]  = useState<string | null>(null);
+  const captchaRef = useRef<RecaptchaHandle>(null);
   const router       = useRouter();
   const searchParams = useSearchParams();
   const next         = searchParams.get('next') || '';
@@ -23,12 +28,15 @@ function RegisterForm() {
     e.preventDefault();
     setError('');
     if (password.length < 8) { setError('Password must be at least 8 characters'); return; }
+    if (!acceptPrivacy) { setError('Please accept the Privacy Policy to continue'); return; }
+    if (RECAPTCHA_SITE_KEY && !captcha) { setError('Please complete the reCAPTCHA check'); return; }
     setLoading(true);
     try {
-      const res  = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, password }) });
+      const res  = await fetch('/api/auth/register', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, email, password, acceptPrivacy, recaptchaToken: captcha || undefined }) });
       const data = await res.json();
-      if (!res.ok) { setError(data.error || 'Registration failed'); setLoading(false); return; }
+      if (!res.ok) { setError(data.error || 'Registration failed'); setLoading(false); captchaRef.current?.reset(); return; }
       localStorage.setItem('dv_user', JSON.stringify(data.user));
+      trackEvent('sign_up', { method: 'email' });
       router.push(next || '/dashboard');
     } catch { setError('Network error. Please try again.'); setLoading(false); }
   }
@@ -83,12 +91,17 @@ function RegisterForm() {
                 </div>
               )}
             </div>
+            <label style={{ display: 'flex', gap: 10, alignItems: 'flex-start', fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>
+              <input type="checkbox" checked={acceptPrivacy} onChange={e => setAcceptPrivacy(e.target.checked)} style={{ marginTop: 3 }} required />
+              <span>I have read and agree to the <Link href="/privacy" target="_blank" style={{ color: 'var(--accent-bright)' }}>Privacy Policy</Link>.</span>
+            </label>
+            <Recaptcha ref={captchaRef} onChange={setCaptcha} />
             <button type="submit" className="btn btn-primary btn-full" disabled={loading} style={{ padding: 12 }}>
               {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <>Create account <ArrowRight size={16} /></>}
             </button>
           </form>
           <p style={{ fontSize: 12, color: 'var(--text-muted)', textAlign: 'center', marginTop: 16 }}>
-            By creating an account, you agree to our Terms of Service and Privacy Policy.
+            Your data is handled as described in our <Link href="/privacy" style={{ color: 'var(--accent-bright)' }}>Privacy Policy</Link>.
           </p>
         </div>
 

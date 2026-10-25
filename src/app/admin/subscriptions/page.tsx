@@ -9,7 +9,7 @@ interface AdminSub {
   id: string; status: string; startDate: string; renewsAt?: string;
   user: { name: string; email: string };
   product: { name: string; category: string };
-  plan: { name: string; price: number; billingCycle: string };
+  plan: { name: string; price: number };
 }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={13} />, DOCKER: <Package size={13} />, EMAIL: <Mail size={13} /> };
@@ -118,7 +118,7 @@ export default function AdminSubscriptionsPage() {
                     </td>
                     <td>
                       <div style={{ fontWeight: 500, fontSize: 13 }}>{sub.plan.name}</div>
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>₹{sub.plan.price}/mo · {sub.plan.billingCycle}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>₹{Number(sub.plan.price).toFixed(2)}/day</div>
                     </td>
                     <td><span className={`badge badge-${statusBadge[sub.status] || 'pending'}`}>{sub.status}</span></td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(sub.startDate).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</td>

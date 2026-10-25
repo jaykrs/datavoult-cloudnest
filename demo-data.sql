@@ -103,26 +103,23 @@ INSERT INTO products (id, name, slug, description, category, status, features, s
 -- PLANS
 -- ============================================================
 
-INSERT INTO plans (id, productId, name, description, price, billingCycle, isPopular, limits, createdAt, updatedAt) VALUES
+INSERT INTO plans (id, productId, name, description, price, isPopular, limits, createdAt, updatedAt) VALUES
 
 -- VPS plans
-('plan_vps_starter',    'prod_vps_001', 'Starter',      'Perfect for personal projects and small apps',   5.99,  'MONTHLY', FALSE, '{"cpu":"1 vCPU","ram":"1 GB","storage":"25 GB SSD","bandwidth":"1 TB","snapshots":"1","ipv4":"1"}',    NOW() - INTERVAL 180 DAY, NOW()),
-('plan_vps_pro',        'prod_vps_001', 'Professional', 'Ideal for growing businesses and production apps',19.99, 'MONTHLY', TRUE,  '{"cpu":"2 vCPUs","ram":"4 GB","storage":"80 GB SSD","bandwidth":"4 TB","snapshots":"5","ipv4":"2"}',   NOW() - INTERVAL 180 DAY, NOW()),
-('plan_vps_business',   'prod_vps_001', 'Business',     'For high-traffic sites and multiple services',   49.99, 'MONTHLY', FALSE, '{"cpu":"4 vCPUs","ram":"8 GB","storage":"160 GB SSD","bandwidth":"8 TB","snapshots":"10","ipv4":"4"}', NOW() - INTERVAL 180 DAY, NOW()),
-('plan_vps_enterprise', 'prod_vps_001', 'Enterprise',   'Maximum resources for enterprise workloads',     99.99, 'MONTHLY', FALSE, '{"cpu":"8 vCPUs","ram":"16 GB","storage":"320 GB SSD","bandwidth":"Unlimited","snapshots":"20","ipv4":"8"}', NOW() - INTERVAL 180 DAY, NOW()),
-
--- VPS annual plans (20% discount)
-('plan_vps_pro_ann',    'prod_vps_001', 'Professional Annual', 'Annual billing — save 20%',               191.90, 'ANNUAL', FALSE, '{"cpu":"2 vCPUs","ram":"4 GB","storage":"80 GB SSD","bandwidth":"4 TB","snapshots":"5","ipv4":"2"}',  NOW() - INTERVAL 180 DAY, NOW()),
+('plan_vps_starter',    'prod_vps_001', 'Starter',      'Perfect for personal projects and small apps',   16.00, FALSE, '{"cpu":"1 vCPU","ram":"1 GB","storage":"25 GB SSD","bandwidth":"1 TB","snapshots":"1","ipv4":"1"}',    NOW() - INTERVAL 180 DAY, NOW()),
+('plan_vps_pro',        'prod_vps_001', 'Professional', 'Ideal for growing businesses and production apps',55.00, TRUE,  '{"cpu":"2 vCPUs","ram":"4 GB","storage":"80 GB SSD","bandwidth":"4 TB","snapshots":"5","ipv4":"2"}',   NOW() - INTERVAL 180 DAY, NOW()),
+('plan_vps_business',   'prod_vps_001', 'Business',     'For high-traffic sites and multiple services',   140.00, FALSE, '{"cpu":"4 vCPUs","ram":"8 GB","storage":"160 GB SSD","bandwidth":"8 TB","snapshots":"10","ipv4":"4"}', NOW() - INTERVAL 180 DAY, NOW()),
+('plan_vps_enterprise', 'prod_vps_001', 'Enterprise',   'Maximum resources for enterprise workloads',     280.00, FALSE, '{"cpu":"8 vCPUs","ram":"16 GB","storage":"320 GB SSD","bandwidth":"Unlimited","snapshots":"20","ipv4":"8"}', NOW() - INTERVAL 180 DAY, NOW()),
 
 -- Docker plans
-('plan_docker_dev',     'prod_docker_001', 'Developer', 'For solo devs and side projects',                9.99,  'MONTHLY', FALSE, '{"containers":"5","ram":"2 GB","storage":"10 GB","builds":"50/month","registrySize":"5 GB"}',         NOW() - INTERVAL 175 DAY, NOW()),
-('plan_docker_team',    'prod_docker_001', 'Team',      'For small teams shipping products',              29.99, 'MONTHLY', TRUE,  '{"containers":"20","ram":"8 GB","storage":"50 GB","builds":"200/month","registrySize":"20 GB"}',      NOW() - INTERVAL 175 DAY, NOW()),
-('plan_docker_scale',   'prod_docker_001', 'Scale',     'For production workloads at scale',              79.99, 'MONTHLY', FALSE, '{"containers":"100","ram":"32 GB","storage":"200 GB","builds":"Unlimited","registrySize":"100 GB"}',   NOW() - INTERVAL 175 DAY, NOW()),
+('plan_docker_dev',     'prod_docker_001', 'Developer', 'For solo devs and side projects',                28.00, FALSE, '{"containers":"5","ram":"2 GB","storage":"10 GB","builds":"50/month","registrySize":"5 GB"}',         NOW() - INTERVAL 175 DAY, NOW()),
+('plan_docker_team',    'prod_docker_001', 'Team',      'For small teams shipping products',              85.00, TRUE,  '{"containers":"20","ram":"8 GB","storage":"50 GB","builds":"200/month","registrySize":"20 GB"}',      NOW() - INTERVAL 175 DAY, NOW()),
+('plan_docker_scale',   'prod_docker_001', 'Scale',     'For production workloads at scale',              225.00, FALSE, '{"containers":"100","ram":"32 GB","storage":"200 GB","builds":"Unlimited","registrySize":"100 GB"}',   NOW() - INTERVAL 175 DAY, NOW()),
 
 -- Email plans
-('plan_email_solo',     'prod_email_001', 'Solo',       'For individuals and freelancers',                2.99,  'MONTHLY', FALSE, '{"mailboxes":"1","storage":"5 GB","aliases":"5","domains":"1","attachment":"25 MB"}',               NOW() - INTERVAL 170 DAY, NOW()),
-('plan_email_business', 'prod_email_001', 'Business',   'For teams and small companies',                  7.99,  'MONTHLY', TRUE,  '{"mailboxes":"10","storage":"50 GB","aliases":"50","domains":"3","attachment":"50 MB"}',             NOW() - INTERVAL 170 DAY, NOW()),
-('plan_email_enterprise','prod_email_001','Enterprise',  'Unlimited mailboxes for large organisations',   24.99, 'MONTHLY', FALSE, '{"mailboxes":"Unlimited","storage":"500 GB","aliases":"Unlimited","domains":"10","attachment":"100 MB"}', NOW() - INTERVAL 170 DAY, NOW());
+('plan_email_solo',     'prod_email_001', 'Solo',       'For individuals and freelancers',                8.00, FALSE, '{"mailboxes":"1","storage":"5 GB","aliases":"5","domains":"1","attachment":"25 MB"}',               NOW() - INTERVAL 170 DAY, NOW()),
+('plan_email_business', 'prod_email_001', 'Business',   'For teams and small companies',                  22.00, TRUE,  '{"mailboxes":"10","storage":"50 GB","aliases":"50","domains":"3","attachment":"50 MB"}',             NOW() - INTERVAL 170 DAY, NOW()),
+('plan_email_enterprise','prod_email_001','Enterprise',  'Unlimited mailboxes for large organisations',   70.00, FALSE, '{"mailboxes":"Unlimited","storage":"500 GB","aliases":"Unlimited","domains":"10","attachment":"100 MB"}', NOW() - INTERVAL 170 DAY, NOW());
 
 
 -- ============================================================
@@ -144,7 +141,7 @@ INSERT INTO subscriptions (id, userId, productId, planId, status, startDate, end
 ('sub_006', 'usr_user_003', 'prod_email_001',  'plan_email_solo',     'ACTIVE',     NOW() - INTERVAL 45 DAY,  NULL, NOW() + INTERVAL 15 DAY,  NULL, NULL, NOW() - INTERVAL 45 DAY,  NOW()),
 
 -- Sofia Garcia — VPS Pro Annual
-('sub_007', 'usr_user_004', 'prod_vps_001',    'plan_vps_pro_ann',    'ACTIVE',     NOW() - INTERVAL 30 DAY,  NULL, NOW() + INTERVAL 335 DAY, NULL, NULL, NOW() - INTERVAL 30 DAY,  NOW()),
+('sub_007', 'usr_user_004', 'prod_vps_001',    'plan_vps_pro',    'ACTIVE',     NOW() - INTERVAL 30 DAY,  NULL, NOW() + INTERVAL 335 DAY, NULL, NULL, NOW() - INTERVAL 30 DAY,  NOW()),
 
 -- Noah Patel — Trial Docker Developer
 ('sub_008', 'usr_user_005', 'prod_docker_001', 'plan_docker_dev',     'TRIAL',      NOW() - INTERVAL 5 DAY,   NULL, NOW() + INTERVAL 2 DAY,   NULL, NULL, NOW() - INTERVAL 5 DAY,   NOW()),

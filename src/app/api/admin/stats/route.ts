@@ -21,7 +21,7 @@ export async function GET() {
       prisma.payment.findMany({
         take: 10,
         orderBy: { createdAt: 'desc' },
-        include: { user: { select: { name: true, email: true } }, subscription: { include: { product: true, plan: true } } },
+        include: { user: { select: { name: true, email: true } }, subscription: { include: { product: true, plan: true } }, invoice: { select: { number: true } } },
       }),
       prisma.subscription.groupBy({
         by: ['productId'],

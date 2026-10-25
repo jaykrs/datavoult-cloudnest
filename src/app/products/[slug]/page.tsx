@@ -9,8 +9,9 @@ import {
   Heading2, Eye, Edit3, Save, X
 } from 'lucide-react';
 
-interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string>; description?: string; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; specs: Record<string, string>; plans: Plan[]; }
+/** `price` = ₹ per day. */
+interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string>; description?: string; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; specs: Record<string, string>; plans: Plan[]; inStock?: boolean; gstRate?: string | number | null; gstInclusive?: boolean; }
 
 const categoryMeta: Record<string, { icon: React.ReactNode; color: string; glow: string }> = {
   VPS: { icon: <Server size={24} />, color: 'var(--vps-color)', glow: 'rgba(59,130,246,0.12)' },
@@ -299,20 +300,20 @@ export default function ProductDetailPage() {
                           <h3 style={{ fontSize: 20, fontWeight: 600, marginBottom: 4 }}>{plan.name}</h3>
                           {plan.description && <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 6 }}>{plan.description}</p>}
                           <div style={{ display: 'flex', alignItems: 'baseline', gap: 4, marginTop: 8 }}>
-                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 36 }}>₹{plan.price}</span>
-                            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>/{plan.billingCycle.toLowerCase()}</span>
+                            <span style={{ fontFamily: 'var(--font-display)', fontSize: 36 }}>₹{Number(plan.price).toFixed(2)}</span>
+                            <span style={{ color: 'var(--text-muted)', fontSize: 13 }}>/day</span>
                           </div>
-                          {plan.billingCycle === 'ANNUAL' && (
-                            <div style={{ fontSize: 12, color: 'var(--green)', marginTop: 4 }}>
-                              Billed annually · save ₹{(plan.price * 0.2 * 12 / 12).toFixed(2)}/mo vs monthly
-                            </div>
-                          )}
+                          <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>
+                            Choose your number of days at checkout · minimum 30 days (₹{(Number(plan.price) * 30).toFixed(2)})
+                            {Number(product.gstRate) > 0 && (product.gstInclusive === false ? ` + ${Number(product.gstRate)}% GST` : ` · incl. ${Number(product.gstRate)}% GST`)}
+                          </div>
                         </div>
                         <button
                           onClick={() => handleSubscribe(plan.id)}
+                          disabled={product.inStock === false}
                           className="subscribe-btn btn"
                           style={{ background: plan.isPopular ? meta.color : 'var(--bg-elevated)', color: plan.isPopular ? 'white' : 'var(--text-primary)', border: plan.isPopular ? 'none' : '1px solid var(--border)', minWidth: 160, justifyContent: 'center', padding: '12px 20px', fontSize: 15 }}>
-                          Subscribe Now
+                          {product.inStock === false ? 'Out of stock' : 'Subscribe Now'}
                         </button>
                       </div>
                       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(150px, 1fr))', gap: 8, marginTop: 20 }}>

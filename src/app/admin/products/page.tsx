@@ -4,10 +4,87 @@ import AdminSidebar from '@/components/admin/AdminSidebar';
 import { Plus, Edit2, Trash2, Server, Package, Mail, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Save, X, Eye, Edit3, Bold, Italic, List, Link as LinkIcon, Code, AlignLeft, Heading1, Heading2 } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
-interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; plans: Plan[]; createdAt: string; }
+interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; gstRate?: string | number | null; gstInclusive?: boolean; sacCode?: string | null; plans: Plan[]; createdAt: string; }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={16} />, DOCKER: <Package size={16} />, EMAIL: <Mail size={16} /> };
+
+// ── Stock editor: blank = unlimited (not tracked), 0 = sold out ──
+function StockEditor({ productId, value, onSaved }: { productId: string; value: number | null | undefined; onSaved: () => void }) {
+  const initial = value === null || value === undefined ? '' : String(value);
+  const [draft, setDraft] = useState(initial);
+  const [saving, setSaving] = useState(false);
+  useEffect(() => { setDraft(initial); }, [initial]);
+
+  async function save() {
+    const trimmed = draft.trim();
+    if (trimmed !== '' && !/^\d+$/.test(trimmed)) { alert('Stock must be a whole number (or blank for unlimited)'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/products/${productId}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ inventoryCount: trimmed === '' ? null : Number(trimmed) }),
+      });
+      if (res.ok) onSaved(); else { const d = await res.json(); alert(d.error || 'Failed to update stock'); }
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+      <input className="input" type="number" min={0} step={1} value={draft} onChange={e => setDraft(e.target.value)}
+        placeholder="∞" title="Blank = unlimited" style={{ width: 80, padding: '6px 8px', fontSize: 13 }} />
+      {draft !== initial && (
+        <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}><Save size={12} /></button>
+      )}
+      {value === 0 && <span className="badge badge-inactive">Sold out</span>}
+    </div>
+  );
+}
+
+// ── GST settings: rate (blank/0 = no GST), included in price or added on top, SAC code ──
+function GstEditor({ product, onSaved }: { product: Product; onSaved: () => void }) {
+  const initialRate = product.gstRate === null || product.gstRate === undefined ? '' : String(Number(product.gstRate));
+  const [rate, setRate] = useState(initialRate);
+  const [inclusive, setInclusive] = useState(product.gstInclusive !== false);
+  const [sac, setSac] = useState(product.sacCode || '');
+  const [saving, setSaving] = useState(false);
+  const dirty = rate !== initialRate || inclusive !== (product.gstInclusive !== false) || sac !== (product.sacCode || '');
+
+  async function save() {
+    const t = rate.trim();
+    const n = t === '' ? null : Number(t);
+    if (n !== null && (!Number.isFinite(n) || n < 0 || n > 28)) { alert('GST rate must be between 0 and 28 (or blank for no GST)'); return; }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ gstRate: n === null || n === 0 ? null : n, gstInclusive: inclusive, sacCode: sac.trim() || null }),
+      });
+      if (res.ok) onSaved(); else { const d = await res.json(); alert(d.error || 'Failed to save GST settings'); }
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ padding: '16px 20px 0' }}>
+      <h3 style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>GST &amp; invoicing</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>
+        Leave the rate blank for <b>no GST</b> (the invoice shows no tax). With a rate, choose whether the listed price already includes GST or GST is added at checkout.
+      </p>
+      <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
+        <div><label className="label">GST rate (%)</label>
+          <input className="input" type="number" min={0} max={28} step="0.01" value={rate} onChange={e => setRate(e.target.value)} placeholder="none" style={{ width: 110, fontSize: 13 }} /></div>
+        <div><label className="label">Price is</label>
+          <select className="input" value={inclusive ? 'in' : 'ex'} onChange={e => setInclusive(e.target.value === 'in')} style={{ fontSize: 13, cursor: 'pointer' }} disabled={rate.trim() === '' || Number(rate) === 0}>
+            <option value="in">GST inclusive</option>
+            <option value="ex">GST extra (added on top)</option>
+          </select></div>
+        <div><label className="label">SAC code</label>
+          <input className="input" value={sac} onChange={e => setSac(e.target.value)} placeholder="998315" maxLength={8} style={{ width: 110, fontSize: 13, fontFamily: 'var(--font-mono)' }} /></div>
+        {dirty && <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}><Save size={13} /> Save GST</button>}
+      </div>
+    </div>
+  );
+}
 
 // ── Minimal HTML Editor (same as product detail) ─────────────
 function HtmlEditor({ value, onChange, onSave, onCancel, saving }: {
@@ -99,7 +176,7 @@ export default function AdminProductsPage() {
   const [descDraft, setDescDraft] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
   const [showPlanForm, setShowPlanForm] = useState<string | null>(null);
-  const [planForm, setPlanForm] = useState({ name: '', price: '', billingCycle: 'MONTHLY', isPopular: false, description: '', limitsRaw: '{}' });
+  const [planForm, setPlanForm] = useState({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}' });
 
   // ============================================
   // DEVELOPER: @Simran Samir : UPDATE PLAN FEATURE - NEW STATE VARIABLES
@@ -109,13 +186,12 @@ export default function AdminProductsPage() {
   const [editPlanForm, setEditPlanForm] = useState({ 
     name: '', 
     price: '', 
-    billingCycle: 'MONTHLY', 
     isPopular: false, 
     description: '', 
     limitsRaw: '{}' 
   });
 
-  const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}' });
+  const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '', gstRate: '', gstInclusive: 'in' });
 
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
@@ -137,13 +213,19 @@ export default function AdminProductsPage() {
       const features = form.features.split('\n').map(f => f.trim()).filter(Boolean);
       let specs: Record<string, string> = {};
       try { specs = JSON.parse(form.specs); } catch { alert('Invalid JSON in specs'); setSaving(false); return; }
+      const stock = form.inventoryCount.trim();
+      if (stock !== '' && !/^\d+$/.test(stock)) { alert('Inventory must be a whole number (or blank for unlimited)'); setSaving(false); return; }
       const res = await fetch('/api/products', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ ...form, features, specs }),
+        body: JSON.stringify({
+          ...form, features, specs, inventoryCount: stock === '' ? null : Number(stock),
+          gstRate: form.gstRate.trim() === '' || Number(form.gstRate) === 0 ? null : Number(form.gstRate),
+          gstInclusive: form.gstInclusive === 'in',
+        }),
       });
       if (res.ok) {
         setShowCreateForm(false);
-        setForm({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}' });
+        setForm({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '', gstRate: '', gstInclusive: 'in' });
         loadProducts();
       } else { const d = await res.json(); alert(d.error || 'Failed to create product'); }
     } finally { setSaving(false); }
@@ -188,14 +270,13 @@ export default function AdminProductsPage() {
           name: planForm.name,
           description: planForm.description || undefined,
           price: parseFloat(planForm.price),
-          billingCycle: planForm.billingCycle,
           isPopular: planForm.isPopular,
           limits,
         }),
       });
       if (res.ok) {
         setShowPlanForm(null);
-        setPlanForm({ name: '', price: '', billingCycle: 'MONTHLY', isPopular: false, description: '', limitsRaw: '{}' });
+        setPlanForm({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}' });
         loadProducts();
       } else { const d = await res.json(); alert(d.error || 'Failed'); }
     } catch (err) { alert('Error creating plan'); }
@@ -227,7 +308,6 @@ export default function AdminProductsPage() {
           name: editPlanForm.name,
           description: editPlanForm.description || undefined,
           price: parseFloat(editPlanForm.price),
-          billingCycle: editPlanForm.billingCycle,
           isPopular: editPlanForm.isPopular,
           limits,
         }),
@@ -238,8 +318,7 @@ export default function AdminProductsPage() {
         setEditPlanForm({ 
           name: '', 
           price: '', 
-          billingCycle: 'MONTHLY', 
-          isPopular: false, 
+                isPopular: false, 
           description: '', 
           limitsRaw: '{}' 
         });
@@ -262,7 +341,6 @@ export default function AdminProductsPage() {
     setEditPlanForm({
       name: plan.name,
       price: plan.price.toString(),
-      billingCycle: plan.billingCycle,
       isPopular: plan.isPopular,
       description: plan.description || '',
       limitsRaw: JSON.stringify(plan.limits, null, 2),
@@ -322,6 +400,22 @@ export default function AdminProductsPage() {
                     <label className="label">Specs (JSON)</label>
                     <input className="input" value={form.specs} onChange={e => setForm(f => ({ ...f, specs: e.target.value }))} placeholder='{"network":"1 Gbps","datacenter":"Tier 4"}' style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
                   </div>
+                  <div>
+                    <label className="label">Inventory count</label>
+                    <input className="input" type="number" min={0} step={1} value={form.inventoryCount} onChange={e => setForm(f => ({ ...f, inventoryCount: e.target.value }))} placeholder="Leave blank for unlimited" />
+                    <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Each new subscription uses one unit. At 0 the product is hidden from the public site and can&apos;t be bought.</div>
+                  </div>
+                  <div>
+                    <label className="label">GST rate (%) — blank = no GST</label>
+                    <input className="input" type="number" min={0} max={28} step="0.01" value={form.gstRate} onChange={e => setForm(f => ({ ...f, gstRate: e.target.value }))} placeholder="e.g. 18" />
+                  </div>
+                  <div>
+                    <label className="label">Listed price is</label>
+                    <select className="input" value={form.gstInclusive} onChange={e => setForm(f => ({ ...f, gstInclusive: e.target.value }))} style={{ cursor: 'pointer' }}>
+                      <option value="in">GST inclusive</option>
+                      <option value="ex">GST extra (added on top)</option>
+                    </select>
+                  </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <label className="label">Features (one per line)</label>
                     <textarea className="input" value={form.features} onChange={e => setForm(f => ({ ...f, features: e.target.value }))} rows={4} placeholder={"NVMe SSD Storage\nDDoS Protection\n24/7 Support"} style={{ resize: 'vertical' }} />
@@ -349,7 +443,7 @@ export default function AdminProductsPage() {
                 {products.map(product => (
                   <div key={product.id} style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-xl)', overflow: 'hidden' }}>
                     {/* Product row */}
-                    <div className="product-row" style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr auto', gap: 16, alignItems: 'center' }}>
+                    <div className="product-row" style={{ padding: '16px 20px', display: 'grid', gridTemplateColumns: '2fr 1fr 1fr 1fr 1.2fr auto', gap: 16, alignItems: 'center' }}>
                       <div>
                         <div style={{ fontWeight: 600, fontSize: 14 }}>{product.name}</div>
                         <div style={{ fontSize: 12, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)', marginTop: 2 }}>{product.slug}</div>
@@ -363,11 +457,12 @@ export default function AdminProductsPage() {
                         {product.plans.length} plan{product.plans.length !== 1 ? 's' : ''}
                         {product.plans.length > 0 && (
                           <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 2 }}>
-                            from ₹{Math.min(...product.plans.map(p => Number(p.price))).toFixed(2)}/mo
+                            from ₹{Math.min(...product.plans.map(p => Number(p.price))).toFixed(2)}/day
                           </div>
                         )}
                       </div>
                       <div><span className={`badge badge-${product.status === 'ACTIVE' ? 'active' : 'inactive'}`}>{product.status}</span></div>
+                      <StockEditor productId={product.id} value={product.inventoryCount} onSaved={loadProducts} />
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                         <button className="icon-btn" onClick={() => toggleStatus(product)} title="Toggle status" style={{ color: product.status === 'ACTIVE' ? 'var(--green)' : 'var(--text-muted)' }}>
                           {product.status === 'ACTIVE' ? <ToggleRight size={18} /> : <ToggleLeft size={18} />}
@@ -388,6 +483,8 @@ export default function AdminProductsPage() {
                     {/* Expanded panel */}
                     {expandedProduct === product.id && (
                       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
+
+                        <GstEditor key={`${product.id}-${product.gstRate}-${product.gstInclusive}-${product.sacCode}`} product={product} onSaved={loadProducts} />
 
                         {/* Description editor */}
                         <div style={{ padding: '20px 20px 0' }}>
@@ -432,16 +529,8 @@ export default function AdminProductsPage() {
                                   <input className="input" value={planForm.name} onChange={e => setPlanForm(f => ({ ...f, name: e.target.value }))} placeholder="Professional" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div>
-                                  <label className="label">Price (USD/mo)</label>
-                                  <input className="input" type="number" step="0.01" min="0" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="19.99" required style={{ fontSize: 13 }} />
-                                </div>
-                                <div>
-                                  <label className="label">Billing Cycle</label>
-                                  <select className="input" value={planForm.billingCycle} onChange={e => setPlanForm(f => ({ ...f, billingCycle: e.target.value }))} style={{ cursor: 'pointer', fontSize: 13 }}>
-                                    <option value="MONTHLY">Monthly</option>
-                                    <option value="QUARTERLY">Quarterly</option>
-                                    <option value="ANNUAL">Annual</option>
-                                  </select>
+                                  <label className="label">Price per day (₹)</label>
+                                  <input className="input" type="number" step="0.01" min="0" value={planForm.price} onChange={e => setPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="16.50" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
                                   <label className="label">Description (optional)</label>
@@ -480,16 +569,8 @@ export default function AdminProductsPage() {
                                   <input className="input" value={editPlanForm.name} onChange={e => setEditPlanForm(f => ({ ...f, name: e.target.value }))} placeholder="Professional" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div>
-                                  <label className="label">Price (USD/mo)</label>
-                                  <input className="input" type="number" step="0.01" min="0" value={editPlanForm.price} onChange={e => setEditPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="19.99" required style={{ fontSize: 13 }} />
-                                </div>
-                                <div>
-                                  <label className="label">Billing Cycle</label>
-                                  <select className="input" value={editPlanForm.billingCycle} onChange={e => setEditPlanForm(f => ({ ...f, billingCycle: e.target.value }))} style={{ cursor: 'pointer', fontSize: 13 }}>
-                                    <option value="MONTHLY">Monthly</option>
-                                    <option value="QUARTERLY">Quarterly</option>
-                                    <option value="ANNUAL">Annual</option>
-                                  </select>
+                                  <label className="label">Price per day (₹)</label>
+                                  <input className="input" type="number" step="0.01" min="0" value={editPlanForm.price} onChange={e => setEditPlanForm(f => ({ ...f, price: e.target.value }))} placeholder="16.50" required style={{ fontSize: 13 }} />
                                 </div>
                                 <div style={{ gridColumn: '1 / -1' }}>
                                   <label className="label">Description (optional)</label>
@@ -524,7 +605,7 @@ export default function AdminProductsPage() {
                                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
                                     <div>
                                       <div style={{ fontWeight: 600, fontSize: 13 }}>{plan.name}</div>
-                                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{plan.billingCycle}</div>
+                                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>per day · min 30 days</div>
                                     </div>
                                     {plan.isPopular && <span style={{ fontSize: 10, background: 'var(--accent)', color: 'white', padding: '1px 4px', borderRadius: 100, fontWeight: 600 }}>Popular</span>}
                                    {/* ============================================ */}
@@ -554,7 +635,7 @@ export default function AdminProductsPage() {
                                   
 
                                   </div>
-                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>₹{Number(plan.price).toFixed(2)}</div>
+                                  <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>₹{Number(plan.price).toFixed(2)}<span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/day</span></div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
                                     {Object.entries(plan.limits).slice(0, 4).map(([k, v]) => (
                                       <div key={k} style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', justifyContent: 'space-between' }}>

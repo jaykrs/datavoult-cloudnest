@@ -2,7 +2,9 @@
 import { useEffect, useState, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Cloud, Lock, Check, ArrowLeft, Shield, Server, Package, Mail, ChevronDown, ChevronUp } from 'lucide-react';
+import { Cloud, Lock, Check, ArrowLeft, Shield, Server, Package, Mail, ChevronDown, ChevronUp, CreditCard, Smartphone, Landmark } from 'lucide-react';
+import { MIN_ORDER_DAYS, MAX_ORDER_DAYS, computeOrderAmounts, gstSettingFrom } from '@/lib/pricing';
+import { GST_STATES } from '@/lib/gst';
 
 interface RazorpaySuccess {
   razorpay_order_id: string;
@@ -27,8 +29,12 @@ function loadRazorpay(): Promise<boolean> {
   });
 }
 
-interface Plan { id: string; name: string; price: number; billingCycle: string; isPopular: boolean; limits: Record<string, string>; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; plans: Plan[]; }
+/** `price` is the cost of ONE DAY in ₹. */
+interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string>; }
+type PayMethod = 'RAZORPAY' | 'UPI' | 'BANK_TRANSFER';
+const DAY_PRESETS = [30, 60, 90, 180, 365];
+interface Product { id: string; name: string; slug: string; description: string; category: string; features: string[]; plans: Plan[]; gstRate?: string | number | null; gstInclusive?: boolean; }
+interface BillingProfile { billingName: string; billingGstin: string; billingAddress: string; billingStateCode: string }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={18} />, DOCKER: <Package size={18} />, EMAIL: <Mail size={18} /> };
 const catColor: Record<string, string> = { VPS: 'var(--vps-color)', DOCKER: 'var(--docker-color)', EMAIL: 'var(--email-color)' };
@@ -50,6 +56,20 @@ function CheckoutForm() {
   const [processing, setProcessing] = useState(false);
   const [error, setError] = useState('');
   const [showSummary, setShowSummary] = useState(false);
+  // Days of service to buy: per-day price × days, minimum 30.
+  const [days, setDays] = useState<number>(MIN_ORDER_DAYS);
+  const [daysText, setDaysText] = useState(String(MIN_ORDER_DAYS));
+  const [method, setMethod] = useState<PayMethod>('RAZORPAY');
+  const [manualAvailable, setManualAvailable] = useState<{ UPI: boolean; BANK_TRANSFER: boolean }>({ UPI: false, BANK_TRANSFER: false });
+
+  // Invoice details (saved to the account before paying, so the invoice is right the moment payment lands).
+  const [bill, setBill] = useState<BillingProfile>({ billingName: '', billingGstin: '', billingAddress: '', billingStateCode: '' });
+
+  const daysValid = Number.isInteger(days) && days >= MIN_ORDER_DAYS && days <= MAX_ORDER_DAYS;
+  function changeDays(text: string) {
+    setDaysText(text);
+    setDays(text.trim() === '' ? NaN : Number(text));
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
@@ -57,6 +77,11 @@ function CheckoutForm() {
     try { setUser(JSON.parse(stored)); } catch {}
 
     if (!productId) { router.push('/products'); return; }
+    fetch('/api/billing-profile').then(r => r.json()).then(d => {
+      const pr = d.data?.profile;
+      if (pr) setBill({ billingName: pr.billingName || '', billingGstin: pr.billingGstin || '', billingAddress: pr.billingAddress || '', billingStateCode: pr.billingStateCode || '' });
+    }).catch(() => {});
+    fetch('/api/payments/manual').then(r => r.json()).then(d => { if (d.data?.methods) setManualAvailable(d.data.methods); }).catch(() => {});
     fetch(`/api/products/${productId}`)
       .then(r => r.json())
       .then(d => {
@@ -99,11 +124,52 @@ function CheckoutForm() {
     router.push('/services');
   }
 
+  /** Save invoice details; returns false (with an error shown) if the server rejects them. */
+  async function saveBillingProfile(): Promise<boolean> {
+    const res = await fetch('/api/billing-profile', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        billingName: bill.billingName || null,
+        billingGstin: bill.billingGstin.trim() || null,
+        billingAddress: bill.billingAddress || null,
+        billingStateCode: bill.billingStateCode || null,
+      }),
+    });
+    if (res.ok) return true;
+    const d = await res.json().catch(() => ({}));
+    setError(d.error || 'Could not save your billing details.');
+    return false;
+  }
+
+  /** UPI / bank transfer: create the request, then show the payment instructions. */
+  async function startManualPayment(m: 'UPI' | 'BANK_TRANSFER') {
+    if (!plan || !product) return;
+    const res = await fetch('/api/payments/manual', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ productId: product.id, planId: plan.id, days, method: m, ...(renewId && { subscriptionId: renewId }) }),
+    });
+    const data = await res.json();
+    if (!res.ok) { setError(data.error || 'Could not create the payment request.'); setProcessing(false); return; }
+    router.push(`/checkout/manual/${data.data.request.id}`);
+  }
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!plan || !product || processing) return;
     setError('');
+    if (!daysValid) { setError(`Enter a whole number of days between ${MIN_ORDER_DAYS} and ${MAX_ORDER_DAYS}.`); return; }
     setProcessing(true);
+
+    try {
+      if (!(await saveBillingProfile())) { setProcessing(false); return; }
+    } catch { setError('Network error. Please try again.'); setProcessing(false); return; }
+
+    if (method !== 'RAZORPAY') {
+      try { await startManualPayment(method); } catch { setError('Network error. Please try again.'); setProcessing(false); }
+      return;
+    }
 
     try {
       if (!(await loadRazorpay())) {
@@ -116,7 +182,7 @@ function CheckoutForm() {
       const orderRes = await fetch('/api/razorpay/create-order', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ productId: product.id, planId: plan.id, ...(renewId && { subscriptionId: renewId }) }),
+        body: JSON.stringify({ productId: product.id, planId: plan.id, days, ...(renewId && { subscriptionId: renewId }) }),
       });
       const orderData = await orderRes.json();
       if (!orderRes.ok) {
@@ -158,9 +224,10 @@ function CheckoutForm() {
   if (!product || !plan) return null;
 
   const color = catColor[product.category] || 'var(--accent)';
-  const annualSave = plan.billingCycle === 'ANNUAL' ? (plan.price / 12).toFixed(2) : null;
-  const tax = (plan.price * 0.0).toFixed(2); // 0% for demo
-  const total = Number(plan.price);
+  const perDay = Number(plan.price);
+  const gstSetting = gstSettingFrom({ gstRate: product.gstRate === undefined || product.gstRate === null ? null : Number(product.gstRate), gstInclusive: product.gstInclusive });
+  const amounts = daysValid ? computeOrderAmounts(perDay, days, gstSetting) : { basePaise: 0, gstPaise: 0, totalPaise: 0, rate: gstSetting.rate ?? 0 };
+  const total = amounts.totalPaise / 100;
 
   return (
     <>
@@ -206,43 +273,85 @@ function CheckoutForm() {
               )}
 
               <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
-                {/* Payment: handled entirely by Razorpay's hosted window */}
+                {/* Duration: price is per day, minimum 30 days */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24 }}>
-                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Payment</h3>
-                  <p style={{ color: 'var(--text-secondary)', fontSize: 14, lineHeight: 1.6 }}>
-                    You will pay in a secure Razorpay window. Cards, UPI, netbanking and wallets are supported.
-                    Your card details go straight to Razorpay and never touch our servers.
+                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>How many days?</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 13, marginBottom: 14 }}>
+                    ₹{perDay.toFixed(2)} per day · minimum {MIN_ORDER_DAYS} days
                   </p>
+                  <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginBottom: 12 }}>
+                    {DAY_PRESETS.map(d => (
+                      <button key={d} type="button" onClick={() => changeDays(String(d))}
+                        className={`btn btn-sm ${days === d ? 'btn-primary' : 'btn-secondary'}`}>{d} days</button>
+                    ))}
+                  </div>
+                  <input className="input checkout-input" type="number" inputMode="numeric" min={MIN_ORDER_DAYS} max={MAX_ORDER_DAYS} step={1}
+                    value={daysText} onChange={e => changeDays(e.target.value)} style={{ maxWidth: 160 }} aria-label="Number of days" />
+                  {!daysValid && (
+                    <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 6 }}>
+                      Enter a whole number of days from {MIN_ORDER_DAYS} to {MAX_ORDER_DAYS}.
+                    </div>
+                  )}
                 </div>
 
-                {/* Billing address */}
+                {/* Payment method */}
                 <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24 }}>
-                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 16 }}>Billing details</h3>
+                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 12 }}>Payment method</h3>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+                    {([
+                      { id: 'RAZORPAY', icon: <CreditCard size={18} />, title: 'Card, UPI, netbanking, wallets', sub: 'Pay online through Razorpay — service starts instantly.', on: true },
+                      { id: 'UPI', icon: <Smartphone size={18} />, title: 'UPI transfer (manual)', sub: 'Pay to our UPI ID. Activated once we confirm the payment.', on: manualAvailable.UPI },
+                      { id: 'BANK_TRANSFER', icon: <Landmark size={18} />, title: 'Bank transfer (NEFT / IMPS / RTGS)', sub: 'Transfer to our current account. Activated once we confirm the payment.', on: manualAvailable.BANK_TRANSFER },
+                    ] as const).filter(m => m.on).map(m => (
+                      <label key={m.id} className={`method-btn${method === m.id ? ' active' : ''}`}
+                        style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
+                        <input type="radio" name="method" checked={method === m.id} onChange={() => setMethod(m.id)} style={{ marginTop: 3 }} />
+                        <span style={{ color: 'var(--accent-bright)', marginTop: 1 }}>{m.icon}</span>
+                        <span>
+                          <span style={{ display: 'block', fontWeight: 600, fontSize: 14 }}>{m.title}</span>
+                          <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{m.sub}</span>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                  {method === 'RAZORPAY' && (
+                    <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6, marginTop: 12 }}>
+                      Card details are entered in Razorpay&apos;s secure window and never touch our servers.
+                    </p>
+                  )}
+                </div>
+
+                {/* Invoice / billing details */}
+                <div style={{ background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius-lg)', padding: 24 }}>
+                  <h3 style={{ fontWeight: 600, fontSize: 15, marginBottom: 4 }}>Billing details (for your invoice)</h3>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 12, marginBottom: 14 }}>
+                    Add your GSTIN if you are GST-registered. Your state decides whether GST is shown as CGST + SGST or IGST.
+                  </p>
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                     <div style={{ gridColumn: '1/-1' }}>
-                      <label className="label">Full name</label>
-                      <input className="input checkout-input" defaultValue={user?.name || ''} placeholder="John Doe" required />
-                    </div>
-                    <div style={{ gridColumn: '1/-1' }}>
-                      <label className="label">Email</label>
-                      <input className="input" value={user?.email || ''} disabled style={{ opacity: 0.6 }} />
+                      <label className="label">Name / company</label>
+                      <input className="input checkout-input" value={bill.billingName} onChange={e => setBill({ ...bill, billingName: e.target.value })} placeholder={user?.name || 'Name on the invoice'} maxLength={150} />
                     </div>
                     <div>
-                      <label className="label">Country</label>
-                      <select className="input checkout-input" style={{ cursor: 'pointer' }}>
-                        <option>India</option>
-                        <option>United Kingdom</option>
-                        <option>Germany</option>
-                        <option>France</option>
-                        <option>United States</option>
-                        <option>Australia</option>
-                        <option>Canada</option>
-                        <option>Other</option>
+                      <label className="label">GSTIN (optional)</label>
+                      <input className="input checkout-input" value={bill.billingGstin}
+                        onChange={e => {
+                          const g = e.target.value.toUpperCase();
+                          // The first two digits of a GSTIN are the state code.
+                          setBill({ ...bill, billingGstin: g, billingStateCode: /^\d{2}/.test(g) && GST_STATES[g.slice(0, 2)] ? g.slice(0, 2) : bill.billingStateCode });
+                        }}
+                        placeholder="29ABCDE1234F1Z5" maxLength={15} style={{ fontFamily: 'var(--font-mono)' }} />
+                    </div>
+                    <div>
+                      <label className="label">State</label>
+                      <select className="input checkout-input" value={bill.billingStateCode} onChange={e => setBill({ ...bill, billingStateCode: e.target.value })} style={{ cursor: 'pointer' }}>
+                        <option value="">Select state…</option>
+                        {Object.entries(GST_STATES).map(([code, name]) => <option key={code} value={code}>{name}</option>)}
                       </select>
                     </div>
-                    <div>
-                      <label className="label">ZIP / Postal code</label>
-                      <input className="input checkout-input" placeholder="10001" />
+                    <div style={{ gridColumn: '1/-1' }}>
+                      <label className="label">Billing address</label>
+                      <textarea className="input checkout-input" rows={3} value={bill.billingAddress} onChange={e => setBill({ ...bill, billingAddress: e.target.value })} maxLength={500} placeholder="Street, city, PIN code" style={{ resize: 'vertical' }} />
                     </div>
                   </div>
                 </div>
@@ -250,9 +359,11 @@ function CheckoutForm() {
                 {/* Submit */}
                 <button type="submit" disabled={processing} className="btn btn-primary" style={{ padding: '16px 28px', fontSize: 16, justifyContent: 'center', width: '100%', position: 'relative' }}>
                   {processing ? (
-                    <><span className="spinner" style={{ width: 18, height: 18 }} /> Processing payment...</>
+                    <><span className="spinner" style={{ width: 18, height: 18 }} /> {method === 'RAZORPAY' ? 'Processing payment...' : 'Creating your order...'}</>
+                  ) : method === 'RAZORPAY' ? (
+                    <><Lock size={16} /> Pay ₹{total.toFixed(2)} · Start service</>
                   ) : (
-                    <><Lock size={16} /> Pay ₹{Number(total).toFixed(2)} · Start service</>
+                    <>Continue · ₹{total.toFixed(2)} by {method === 'UPI' ? 'UPI' : 'bank transfer'}</>
                   )}
                 </button>
 
@@ -306,18 +417,24 @@ function CheckoutForm() {
                   <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
                     <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
                       <span style={{ color: 'var(--text-secondary)' }}>{plan.name} plan</span>
-                      <span>₹{Number(plan.price).toFixed(2)}</span>
+                      <span>₹{perDay.toFixed(2)} / day</span>
                     </div>
-                    {annualSave && (
-                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--green)' }}>
-                        <span>Annual discount (20% off)</span>
-                        <span>–₹{(Number(annualSave) * 12 * 0.25).toFixed(2)}</span>
-                      </div>
-                    )}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 12, color: 'var(--text-muted)' }}>
-                      <span>Tax</span>
-                      <span>₹{tax}</span>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                      <span style={{ color: 'var(--text-secondary)' }}>Duration</span>
+                      <span>{daysValid ? days : '—'} days</span>
                     </div>
+                    {amounts.rate > 0 ? (
+                      <>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>Subtotal{gstSetting.inclusive ? ' (excl. GST)' : ''}</span>
+                          <span>₹{(amounts.basePaise / 100).toFixed(2)}</span>
+                        </div>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13 }}>
+                          <span style={{ color: 'var(--text-secondary)' }}>GST @ {amounts.rate}%{gstSetting.inclusive ? ' (included)' : ''}</span>
+                          <span>₹{(amounts.gstPaise / 100).toFixed(2)}</span>
+                        </div>
+                      </>
+                    ) : null}
                   </div>
                 </div>
 
@@ -326,14 +443,14 @@ function CheckoutForm() {
                   <span style={{ fontWeight: 600, fontSize: 15 }}>Total today</span>
                   <div style={{ textAlign: 'right' }}>
                     <div style={{ fontFamily: 'var(--font-display)', fontSize: 28, color }}>₹{total.toFixed(2)}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>then ₹{total.toFixed(2)} / {plan.billingCycle.toLowerCase()}</div>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>₹{perDay.toFixed(2)} × {daysValid ? days : '—'} days{amounts.rate > 0 && !gstSetting.inclusive ? ' + GST' : ''}</div>
                   </div>
                 </div>
 
                 {/* Trust signals */}
                 <div style={{ padding: '16px 24px', display: 'flex', flexDirection: 'column', gap: 10 }}>
                   {[
-                    { icon: <Check size={13} />, text: 'Service activates instantly after payment' },
+                    { icon: <Check size={13} />, text: 'Online payments activate instantly; UPI / bank transfers once we confirm the money' },
                     { icon: <Shield size={13} />, text: '30-day money-back guarantee' },
                     { icon: <Lock size={13} />, text: 'Cancel anytime, no lock-in' },
                   ].map(t => (
@@ -354,7 +471,7 @@ function CheckoutForm() {
                       <Link key={p.id} href={`/checkout?plan=${p.id}&product=${productId}`}
                         style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 14px', borderRadius: 'var(--radius-md)', background: p.id === plan.id ? 'var(--bg-hover)' : 'var(--bg-card)', border: `1px solid ${p.id === plan.id ? 'var(--accent)44' : 'var(--border)'}`, fontSize: 13, color: p.id === plan.id ? 'var(--text-primary)' : 'var(--text-secondary)', textDecoration: 'none', transition: 'all 0.15s' }}>
                         <span>{p.name}</span>
-                        <span style={{ fontWeight: 600, color: p.id === plan.id ? color : undefined }}>₹{p.price}/mo</span>
+                        <span style={{ fontWeight: 600, color: p.id === plan.id ? color : undefined }}>₹{Number(p.price).toFixed(2)}/day</span>
                       </Link>
                     ))}
                   </div>

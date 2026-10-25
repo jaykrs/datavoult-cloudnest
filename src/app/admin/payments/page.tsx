@@ -8,7 +8,8 @@ interface User { name: string; email: string; role: string; }
 interface AdminPayment {
   id: string; amount: number; currency: string; status: string; method: string; createdAt: string;
   user: { name: string; email: string };
-  subscription?: { product: { name: string }; plan: { name: string; billingCycle: string } };
+  subscription?: { product: { name: string }; plan: { name: string } };
+  invoice?: { number: string } | null;
 }
 
 const statusIcon: Record<string, React.ReactNode> = {
@@ -100,13 +101,13 @@ export default function AdminPaymentsPage() {
           <div className="table-wrap">
             <table className="data-table">
               <thead>
-                <tr><th>Transaction</th><th>User</th><th>Service</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th></tr>
+                <tr><th>Transaction</th><th>User</th><th>Service</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Invoice</th></tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={7} style={{ padding: 48, textAlign: 'center' }}><span className="spinner" style={{ width: 28, height: 28, display: 'inline-block' }} /></td></tr>
+                  <tr><td colSpan={8} style={{ padding: 48, textAlign: 'center' }}><span className="spinner" style={{ width: 28, height: 28, display: 'inline-block' }} /></td></tr>
                 ) : payments.length === 0 ? (
-                  <tr><td colSpan={7} style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No payments found</td></tr>
+                  <tr><td colSpan={8} style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No payments found</td></tr>
                 ) : payments.map((p, i) => (
                   <tr key={p.id}>
                     <td style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
@@ -139,6 +140,11 @@ export default function AdminPaymentsPage() {
                     </td>
                     <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>
                       {new Date(p.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+                    </td>
+                    <td style={{ fontSize: 12 }}>
+                      {p.status === 'COMPLETED' ? (
+                        <a href={`/invoices/${p.id}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-bright)', fontFamily: 'var(--font-mono)' }}>{p.invoice?.number ?? 'Generate'}</a>
+                      ) : '—'}
                     </td>
                   </tr>
                 ))}

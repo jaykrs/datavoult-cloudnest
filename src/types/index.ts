@@ -1,6 +1,5 @@
 export type Category = 'VPS' | 'DOCKER' | 'EMAIL';
 export type ProductStatus = 'ACTIVE' | 'INACTIVE' | 'COMING_SOON';
-export type BillingCycle = 'MONTHLY' | 'QUARTERLY' | 'ANNUAL';
 export type SubscriptionStatus = 'ACTIVE' | 'SUSPENDED' | 'CANCELLED' | 'EXPIRED' | 'TRIAL';
 export type PaymentStatus = 'PENDING' | 'COMPLETED' | 'FAILED' | 'REFUNDED';
 export type Role = 'USER' | 'ADMIN' | 'SUPER_ADMIN';
@@ -24,8 +23,8 @@ export interface Plan {
   productId: string;
   name: string;
   description?: string;
+  /** INR per day of service */
   price: number;
-  billingCycle: BillingCycle;
   isPopular: boolean;
   limits: Record<string, string | number>;
 }

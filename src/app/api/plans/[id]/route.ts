@@ -9,7 +9,7 @@ interface Params { params: { id: string } }
 export async function PATCH(req: NextRequest, { params }: Params) {
   try {
     await requireAdmin();
-    const { name, description, price, billingCycle, isPopular, limits } = updatePlanSchema.parse(await req.json());
+    const { name, description, price, isPopular, limits } = updatePlanSchema.parse(await req.json());
 
     const plan = await prisma.plan.update({
       where: { id: params.id },
@@ -17,7 +17,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
         ...(price !== undefined && { price }),
-        ...(billingCycle !== undefined && { billingCycle }),
         ...(isPopular !== undefined && { isPopular }),
         ...(limits !== undefined && { limits: limits as object }),
       },

@@ -13,8 +13,11 @@ const PUBLIC_PATHS = [
   '/register',
   '/products',
   '/pricing',
+  '/privacy',
+  '/contact',
   '/checkout',          // checkout handles its own auth redirect client-side
   '/api/auth',
+  '/api/contact',       // public contact form (reCAPTCHA + rate limited inside)
   '/api/products',      // product listing/detail is public
   '/api/razorpay/webhook',
   '/api/internal',

@@ -1,6 +1,7 @@
 'use client';
 import Link from 'next/link';
 import Navbar from '@/components/marketing/Navbar';
+import Footer from '@/components/marketing/Footer';
 import { Database, Server, Package, Mail, Shield, Zap, Globe, ArrowRight, Check } from 'lucide-react';
 
 export default function HomePage() {
@@ -151,23 +152,7 @@ export default function HomePage() {
         </div>
       </section>
 
-      {/* Footer */}
-      <footer style={{ padding: '40px 0', borderTop: '1px solid var(--border-subtle)' }}>
-        <div className="container" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontWeight: 600 }}>
-            <div style={{ width: 24, height: 24, background: 'var(--accent)', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Database size={14} color="white" />
-            </div>
-            DataVoult
-          </div>
-          <div style={{ color: 'var(--text-muted)', fontSize: 13 }}>© 2025 DataVoult. All rights reserved.</div>
-          <div style={{ display: 'flex', gap: 24, fontSize: 13, color: 'var(--text-muted)' }}>
-            <Link href="/products">Products</Link>
-            <Link href="/pricing">Pricing</Link>
-            <Link href="/login">Login</Link>
-          </div>
-        </div>
-      </footer>
+      <Footer />
     </div>
   );
 }

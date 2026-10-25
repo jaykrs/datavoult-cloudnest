@@ -18,11 +18,21 @@ model User {
   role          Role     @default(USER)
   avatarUrl     String?
   isVerified    Boolean  @default(false)
+  /// When the user accepted the Privacy Policy at sign-up (consent record). Null for accounts created before it was asked.
+  privacyAcceptedAt DateTime?
+  /// Billing details for invoices (all optional; GSTIN only if the customer is GST-registered).
+  billingName      String?
+  billingGstin     String?
+  billingAddress   String?  @db.Text
+  /// GST state code (e.g. "29") of the customer, used for CGST+SGST vs IGST.
+  billingStateCode String?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
   subscriptions Subscription[]
   payments      Payment[]
+  paymentRequests PaymentRequest[]
+  invoices      Invoice[]
   sessions      Session[]
   supportTickets SupportTicket[]
 
@@ -51,11 +61,22 @@ model Product {
   features    Json
   specs       Json
   imageUrl    String?
+  /// GST percentage charged on this product; NULL = no GST.
+  gstRate        Decimal? @db.Decimal(5, 2)
+  /// true: listed prices already include GST. false: GST is added on top at checkout.
+  gstInclusive   Boolean  @default(true)
+  /// GST service accounting code shown on invoices (defaults to 998315 in the app).
+  sacCode        String?
+  /// Units left to sell. NULL = not tracked (unlimited). Each new subscription
+  /// uses one unit; at 0 the product is hidden from the public catalogue and
+  /// cannot be bought.
+  inventoryCount Int?
   createdAt   DateTime    @default(now())
   updatedAt   DateTime    @updatedAt
 
   plans         Plan[]
   subscriptions Subscription[]
+  paymentRequests PaymentRequest[]
 
   @@map("products")
 }
@@ -65,8 +86,9 @@ model Plan {
   productId     String
   name          String
   description   String?
+  /// Price of ONE DAY of service in INR. Customers buy a whole number of days
+  /// (minimum 30) and pay price x days — see src/lib/pricing.ts.
   price         Decimal  @db.Decimal(10, 2)
-  billingCycle  BillingCycle @default(MONTHLY)
   isPopular     Boolean  @default(false)
   /// Soft delete: existing subscriptions keep referencing the plan, but it is
   /// hidden from the catalogue and cannot be purchased.
@@ -77,6 +99,7 @@ model Plan {
 
   product       Product  @relation(fields: [productId], references: [id], onDelete: Cascade)
   subscriptions Subscription[]
+  paymentRequests PaymentRequest[]
 
   @@map("plans")
 }
@@ -162,8 +185,94 @@ model Payment {
 
   user         User          @relation(fields: [userId], references: [id])
   subscription Subscription? @relation(fields: [subscriptionId], references: [id])
+  invoice      Invoice?
 
   @@map("payments")
+}
+
+/// A customer's offline payment (UPI or bank transfer) waiting for an admin to
+/// confirm the money arrived. Approval runs the same fulfilment as an online payment.
+model PaymentRequest {
+  id             String               @id @default(cuid())
+  /// Short code the customer puts in the transfer remark, e.g. DV-7K3M9QXA.
+  reference      String               @unique
+  userId         String
+  productId      String
+  planId         String
+  /// Set when the order renews an existing subscription.
+  subscriptionId String?
+  days           Int
+  /// Exact amount in INR the customer must transfer (plan price x days).
+  amount         Decimal              @db.Decimal(10, 2)
+  method         PaymentMethod
+  status         PaymentRequestStatus @default(AWAITING_PAYMENT)
+  /// UTR / bank reference the customer entered after paying.
+  transactionRef String?
+  /// Payer name / UPI ID as entered by the customer, to help match the bank statement.
+  payerDetails   String?
+  submittedAt    DateTime?
+  expiresAt      DateTime
+  reviewedById   String?
+  reviewedAt     DateTime?
+  reviewNote     String?
+  /// The subscription created or renewed on approval.
+  resultSubscriptionId String?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+  plan    Plan    @relation(fields: [planId], references: [id])
+
+  @@index([status, createdAt])
+  @@index([userId, status])
+  @@index([transactionRef])
+  @@map("payment_requests")
+}
+
+/// One invoice per completed payment (any method). Amounts are snapshots taken at
+/// payment time, so later price/GST/profile changes never alter an issued invoice.
+model Invoice {
+  id             String   @id @default(cuid())
+  /// Sequential per financial year, max 16 chars (GST rule), e.g. DV2627-000042.
+  number         String   @unique
+  /// Financial year label, e.g. 2026-27.
+  fy             String
+  paymentId      String   @unique
+  userId         String
+  subscriptionId String?
+  issuedAt       DateTime @default(now())
+  description    String
+  sacCode        String?
+  days           Int?
+  /// Value before GST.
+  taxableAmount  Decimal  @db.Decimal(10, 2)
+  /// 0 when the product carries no GST.
+  gstRate        Decimal  @db.Decimal(5, 2)
+  cgst           Decimal  @db.Decimal(10, 2)
+  sgst           Decimal  @db.Decimal(10, 2)
+  igst           Decimal  @db.Decimal(10, 2)
+  /// What the customer paid (equals the payment amount).
+  total          Decimal  @db.Decimal(10, 2)
+  placeOfSupply  String?
+  /// Seller and buyer details as they were when the invoice was issued.
+  seller         Json
+  buyer          Json
+  createdAt      DateTime @default(now())
+
+  payment Payment @relation(fields: [paymentId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  @@index([userId, issuedAt])
+  @@map("invoices")
+}
+
+/// Last invoice serial used per financial year (key like "2627"); gives gap-free numbering.
+model InvoiceCounter {
+  id         String @id
+  lastNumber Int
+
+  @@map("invoice_counters")
 }
 
 model SupportTicket {
@@ -195,6 +304,27 @@ model TicketReply {
   @@map("ticket_replies")
 }
 
+/// Messages submitted through the public Contact Us form.
+model ContactMessage {
+  id        String        @id @default(cuid())
+  name      String
+  email     String
+  subject   String
+  message   String        @db.Text
+  status    ContactStatus @default(NEW)
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
+
+  @@index([status, createdAt])
+  @@map("contact_messages")
+}
+
+enum ContactStatus {
+  NEW
+  READ
+  RESOLVED
+}
+
 enum Role {
   USER
   ADMIN
@@ -213,12 +343,6 @@ enum ProductStatus {
   COMING_SOON
 }
 
-enum BillingCycle {
-  MONTHLY
-  QUARTERLY
-  ANNUAL
-}
-
 enum SubscriptionStatus {
   PENDING
   ACTIVE
@@ -226,6 +350,14 @@ enum SubscriptionStatus {
   CANCELLED
   EXPIRED
   TRIAL
+}
+
+enum PaymentRequestStatus {
+  AWAITING_PAYMENT
+  SUBMITTED
+  APPROVED
+  REJECTED
+  CANCELLED
 }
 
 enum PaymentStatus {

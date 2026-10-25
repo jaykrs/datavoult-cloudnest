@@ -109,6 +109,8 @@ CREDENTIALS_ENCRYPTION_KEY=""    # openssl rand -hex 32     (encrypts customer s
 
 Payments, the webhook, the billing cron and provisioning have their own variables — see the commented [`.env.example`](.env.example) for all of them.
 
+Optional integrations (all documented in `.env.example`): **Google reCAPTCHA v2** (`NEXT_PUBLIC_RECAPTCHA_SITE_KEY`, `RECAPTCHA_SECRET_KEY`), **Google Tag Manager** (`NEXT_PUBLIC_GTM_ID`) and **SMTP email** (`SMTP_*`, `MAIL_FROM`, `ADMIN_NOTIFY_EMAIL`).
+
 ### 4. Set up database
 ```bash
 # Push schema to MySQL
@@ -238,6 +240,36 @@ The app uses a custom CSS design system defined in `globals.css`:
 - **Typography**: DM Serif Display (headings) + DM Sans (body) + DM Mono (code)
 - **Dark theme** — optimized for infrastructure dashboards
 - **CSS variables** for full consistency across components
+
+---
+
+## 🍪 Privacy, Analytics, Contact & Inventory
+
+- **Cookie consent**: banner with Accept / Reject on every page; the choice is stored for a year and can be changed from the footer ("Cookie settings"). Google Tag Manager is injected **only after Accept**; rejecting (or withdrawing) loads nothing. `page_view`, `sign_up`, `login` and `contact_submit` events are pushed to the `dataLayer`.
+- **Privacy Policy** at `/privacy` (a template — have it legally reviewed). Sign-up requires ticking the policy checkbox; the acceptance time is stored (`users.privacyAcceptedAt`).
+- **reCAPTCHA v2** on sign in, sign up and the contact form, verified server-side. In production the forms are refused if `RECAPTCHA_SECRET_KEY` is missing (fails closed).
+- **Contact form** at `/contact` → stored and shown in **Admin → Messages** (search, status filter, mark read/resolved, delete, reply by email). Honeypot + rate limit; no IP is stored.
+- **Email notifications** (SMTP): welcome email + admin alert on sign-up; confirmation + admin alert on each new subscription; admin alert on contact messages. Email never blocks or breaks a request, and is skipped when SMTP is not configured.
+- **Inventory**: set an *Inventory count* when creating a product (or edit it inline in Admin → Products). Blank = unlimited. Each **new** subscription takes one unit atomically; at 0 the product disappears from the public lists and cannot be bought (renewals are unaffected). Stock is not restored on cancellation/refund — adjust it manually.
+
+---
+
+## 💳 Pricing & Payments
+
+- **Per-day pricing in ₹**: a plan's price is the cost of **one day**. Customers choose a number of days (**minimum 30**, maximum 1095) at checkout and pay `price × days`. The total is always computed on the server in integer paise (`src/lib/pricing.ts`); the browser never sends an amount. The subscription runs for exactly the purchased days, and renewals add days from the later of "now" and the current end date.
+- **Payment methods**: Razorpay (cards, UPI, netbanking, wallets — instant) plus **UPI** and **bank transfer** to your account. For the offline methods the customer gets a unique reference (`DV-XXXXXXXX`) and your payment details, pays, then enters the UTR. Set the account in `.env` (`BANK_*`, `UPI_*`); a method is hidden until configured.
+- **Admin approval**: **Admin → Bank/UPI payments** lists requests waiting for verification. Check your bank statement, type the amount you actually received (it must equal the order to the paisa), and approve — the subscription is created, stock decremented and emails sent exactly as for an online payment. Reject with a reason to notify the customer. Duplicate UTRs are flagged. Requests expire after 72 hours if unpaid.
+- **Upgrading from monthly plans**: the migration converts each existing plan's price to a per-day rate (monthly ÷ 30, quarterly ÷ 90, annual ÷ 365, rounded to paise) and drops the billing cycle. **Review prices in Admin → Products after migrating.**
+
+---
+
+## 🧾 GST & Invoices
+
+- **Per-product GST** (Admin → Products): set a **GST rate** or leave it blank for **no GST**; choose whether the listed price **includes GST** or GST is **added on top**; optionally set a **SAC code** (default 998315). Checkout shows the breakdown and the server charges exactly that total (`price × days`, plus GST when added on top).
+- **Automatic invoices**: an invoice is created as soon as a payment is confirmed — Razorpay, UPI or bank-transfer approval, and renewals alike. Products without GST get a plain **Invoice**; products with GST get a **Tax Invoice** with taxable value and **CGST + SGST** (customer in the seller's state, or no state given) or **IGST** (customer in another state).
+- Numbers are sequential per Indian financial year and within GST's 16-character limit (e.g. `DV2627-000042`). The tax split is snapshotted at payment time, so later price/GST changes never alter an issued invoice.
+- Customers add name, GSTIN (optional), address and state at checkout; view/print invoices from **Billing** (print → *Save as PDF*) and get an email when it's issued. Admins can open any invoice from **Admin → Payments**.
+- **Setup**: set `SELLER_NAME`, `SELLER_ADDRESS` and (if you charge GST) `SELLER_GSTIN` — see `.env.example`. Until then invoices aren't issued; they are generated automatically the next time the payment is looked at once configured.
 
 ---
 

@@ -1,4 +1,5 @@
 import Razorpay from 'razorpay';
+import { assertValidDays } from './pricing';
 
 let client: Razorpay | null = null;
 
@@ -22,6 +23,8 @@ export interface OrderNotes {
   userId: string;
   productId: string;
   planId: string;
+  /** Days purchased (>= 30). The amount paid must equal plan price × days. */
+  days: number;
   /** Present when the order renews an existing subscription. */
   subscriptionId?: string;
 }
@@ -30,12 +33,21 @@ export function parseOrderNotes(notes: unknown): OrderNotes | null {
   if (!notes || typeof notes !== 'object') return null;
   const n = notes as Record<string, unknown>;
   if (typeof n.userId !== 'string' || typeof n.productId !== 'string' || typeof n.planId !== 'string') return null;
+  // Razorpay stores note values as strings.
+  let days: number;
+  try { days = assertValidDays(Number(n.days)); } catch { return null; }
   return {
     userId: n.userId,
     productId: n.productId,
     planId: n.planId,
+    days,
     subscriptionId: typeof n.subscriptionId === 'string' && n.subscriptionId ? n.subscriptionId : undefined,
   };
+}
+
+/** Razorpay notes must be string values. */
+export function notesForRazorpay(notes: OrderNotes): Record<string, string> {
+  return Object.fromEntries(Object.entries(notes).filter(([, v]) => v !== undefined).map(([k, v]) => [k, String(v)]));
 }
 
 /** Map Razorpay's payment `method` to our enum. */
