@@ -2,9 +2,11 @@ import type { Metadata } from 'next';
 import './globals.css';
 import CookieConsent from '@/components/ui/CookieConsent';
 import Analytics from '@/components/ui/Analytics';
+import { getSiteUrl } from '@/lib/seo';
 
 export const metadata: Metadata = {
-  title: 'DataVoult — Cloud Infrastructure',
+  metadataBase: new URL(getSiteUrl()),
+  title: { default: 'DataVoult — Cloud Infrastructure', template: '%s' },
   description: 'High-performance VPS, Docker hosting, and Business Email for modern teams.',
 };
 

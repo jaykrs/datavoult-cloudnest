@@ -254,6 +254,15 @@ The app uses a custom CSS design system defined in `globals.css`:
 
 ---
 
+## 📝 Blog, SEO & Sitemap
+
+- **Admin → Blog** (`/admin/blog`): create/edit posts with a visual + HTML editor, upload or paste images, categories, cover image, draft/published status and an optional (future) publish date to schedule. Each post has meta title/description/share image with a search-result preview.
+- **Public**: `/blog` (category filter via `?category=slug`, pagination) and `/blog/[slug]` (Open Graph, canonical URL, `BlogPosting` JSON-LD, related posts).
+- **Security**: post HTML is sanitised server-side with an allow-list on save (and again on render); images are type-checked from their bytes (PNG/JPEG/GIF/WebP, max 3 MB, no SVG) and stored in the database, served from `/api/media/:id`.
+- **Product SEO**: Admin → Products → expand a product → *SEO & sharing* (meta title, description, keywords, share image). Blank fields fall back to the product name/description; non-active products are `noindex`.
+- **`/sitemap.xml`** lists static pages, active products and published posts; **`/robots.txt`** blocks admin, API, checkout and other private areas and links the sitemap. Set `APP_URL` in production so these use your real domain.
+- Apply the new migration with `npx prisma migrate deploy`.
+
 ## 💳 Pricing & Payments
 
 - **Per-day pricing in ₹**: a plan's price is the cost of **one day**. Customers choose a number of days (**minimum 30**, maximum 1095) at checkout and pay `price × days`. The total is always computed on the server in integer paise (`src/lib/pricing.ts`); the browser never sends an amount. The subscription runs for exactly the purchased days, and renewals add days from the later of "now" and the current end date.

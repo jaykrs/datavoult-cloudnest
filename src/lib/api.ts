@@ -1,5 +1,19 @@
 import { NextRequest } from 'next/server';
 import { z } from 'zod';
+import { SLUG_PATTERN } from './slug';
+import { IMAGE_URL_PATTERN } from './media';
+
+// Shared field helpers (declared first: the schemas below use them at module load).
+const blank = (v: unknown) => (typeof v === 'string' && v.trim() === '' ? null : v);
+/** Optional text that treats '' as null. */
+const optText = (max: number) => z.preprocess(blank, z.string().trim().max(max).nullable().optional());
+/** Optional image URL: one of our own uploads (/api/media/...) or an https URL. */
+export const imageUrlField = z.preprocess(
+  blank,
+  z.string().trim().max(500).regex(IMAGE_URL_PATTERN, 'Use an uploaded image or an https:// image URL').nullable().optional(),
+);
+const slugField = z.preprocess(blank, z.string().trim().max(80).regex(SLUG_PATTERN, 'Slug can only contain lowercase letters, numbers and dashes').nullable().optional());
+
 
 export function apiSuccess<T>(data: T, status = 200) {
   return Response.json({ success: true, data }, { status });
@@ -115,6 +129,10 @@ export const createProductSchema = z.object({
   gstInclusive: z.boolean().optional(),
   /** GST service accounting code (4–8 digits) shown on invoices. */
   sacCode: z.string().trim().regex(/^\d{4,8}$/, 'SAC code must be 4–8 digits').nullable().optional(),
+  metaTitle: optText(255),
+  metaDescription: optText(320),
+  metaKeywords: optText(255),
+  ogImageUrl: imageUrlField,
 });
 
 export const createPlanSchema = z.object({
@@ -140,4 +158,38 @@ export const updateProfileSchema = z.object({
   name: z.string().trim().min(2).max(100).optional(),
   currentPassword: z.string().min(1).max(100).optional(),
   newPassword: z.string().min(8).max(100).optional(),
+});
+
+
+// ── Blog & SEO ──────────────────────────────────────────────────────────────
+
+export const blogPostSchema = z.object({
+  title: z.string().trim().min(3, 'Title must be at least 3 characters').max(190),
+  slug: slugField,
+  excerpt: optText(500),
+  content: z.string().max(600_000, 'Content is too long'),
+  coverImageUrl: imageUrlField,
+  categoryId: z.preprocess(blank, z.string().min(1).nullable().optional()),
+  status: z.enum(['DRAFT', 'PUBLISHED']).default('DRAFT'),
+  /** ISO date-time; a future date schedules the post. */
+  publishedAt: z.preprocess(blank, z.string().datetime({ offset: true }).nullable().optional()),
+  metaTitle: optText(255),
+  metaDescription: optText(320),
+  ogImageUrl: imageUrlField,
+});
+export const updateBlogPostSchema = blogPostSchema.partial();
+
+export const blogCategorySchema = z.object({
+  name: z.string().trim().min(2, 'Name must be at least 2 characters').max(60),
+  slug: slugField,
+  description: optText(190),
+});
+export const updateBlogCategorySchema = blogCategorySchema.partial();
+
+/** SEO fields editable per product from the admin dashboard. */
+export const productSeoSchema = z.object({
+  metaTitle: optText(255),
+  metaDescription: optText(320),
+  metaKeywords: optText(255),
+  ogImageUrl: imageUrlField,
 });
