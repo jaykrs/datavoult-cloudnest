@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Database, LayoutDashboard, Package, Users, CreditCard, Receipt, Settings, LogOut, ChevronRight, ShieldAlert, Inbox, Landmark } from 'lucide-react';
+import { Database, LayoutDashboard, Package, Users, CreditCard, Receipt, Settings, LogOut, ChevronRight, ShieldAlert, Inbox, Landmark, FileText } from 'lucide-react';
 
 interface AdminSidebarProps { user?: { name: string; email: string; role: string } | null; }
 
@@ -23,6 +23,7 @@ export default function AdminSidebar({ user }: AdminSidebarProps) {
     { href: '/admin/payments',       icon: <CreditCard size={17} />,      label: 'Payments' },
     { href: '/admin/payment-requests', icon: <Landmark size={17} />,        label: 'Bank/UPI payments' },
     { href: '/admin/contact-messages', icon: <Inbox size={17} />,         label: 'Messages' },
+    { href: '/admin/blog',           icon: <FileText size={17} />,        label: 'Blog' },
   ];
 
   return (

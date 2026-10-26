@@ -33,6 +33,7 @@ model User {
   payments      Payment[]
   paymentRequests PaymentRequest[]
   invoices      Invoice[]
+  blogPosts     BlogPost[]
   sessions      Session[]
   supportTickets SupportTicket[]
 
@@ -67,6 +68,12 @@ model Product {
   gstInclusive   Boolean  @default(true)
   /// GST service accounting code shown on invoices (defaults to 998315 in the app).
   sacCode        String?
+  /// SEO / marketing metadata for the product page (all optional; sensible defaults are derived).
+  metaTitle       String? @db.VarChar(255)
+  metaDescription String? @db.VarChar(320)
+  metaKeywords    String? @db.VarChar(255)
+  /// Image used for link previews (Open Graph / Twitter). Falls back to imageUrl.
+  ogImageUrl      String? @db.VarChar(500)
   /// Units left to sell. NULL = not tracked (unlimited). Each new subscription
   /// uses one unit; at 0 the product is hidden from the public catalogue and
   /// cannot be bought.
@@ -273,6 +280,65 @@ model InvoiceCounter {
   lastNumber Int
 
   @@map("invoice_counters")
+}
+
+enum BlogStatus {
+  DRAFT
+  PUBLISHED
+}
+
+model BlogCategory {
+  id          String   @id @default(cuid())
+  name        String   @unique
+  slug        String   @unique
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  posts BlogPost[]
+
+  @@map("blog_categories")
+}
+
+/// Marketing blog post. `content` is HTML, sanitised on save (see src/lib/html-sanitize.ts).
+model BlogPost {
+  id              String     @id @default(cuid())
+  title           String
+  slug            String     @unique
+  excerpt         String?    @db.VarChar(500)
+  content         String     @db.LongText
+  coverImageUrl   String?    @db.VarChar(500)
+  categoryId      String?
+  authorId        String?
+  status          BlogStatus @default(DRAFT)
+  /// Visible on the public site once status is PUBLISHED and this time has passed.
+  publishedAt     DateTime?
+  metaTitle       String?    @db.VarChar(255)
+  metaDescription String?    @db.VarChar(320)
+  ogImageUrl      String?    @db.VarChar(500)
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+
+  category BlogCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
+  author   User?         @relation(fields: [authorId], references: [id], onDelete: SetNull)
+
+  @@index([status, publishedAt])
+  @@index([categoryId])
+  @@map("blog_posts")
+}
+
+/// Images uploaded from the admin editor, stored in the database so the app needs no
+/// shared disk or object store. Served from /api/media/:id.
+model MediaAsset {
+  id           String   @id @default(cuid())
+  filename     String
+  mimeType     String
+  size         Int
+  data         Bytes    @db.LongBlob
+  uploadedById String?
+  createdAt    DateTime @default(now())
+
+  @@map("media_assets")
 }
 
 model SupportTicket {

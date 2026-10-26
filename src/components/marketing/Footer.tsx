@@ -10,6 +10,7 @@ export default function Footer() {
         <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
           <Link href="/products" style={link}>Products</Link>
           <Link href="/pricing" style={link}>Pricing</Link>
+          <Link href="/blog" style={link}>Blog</Link>
           <Link href="/contact" style={link}>Contact</Link>
           <Link href="/privacy" style={link}>Privacy Policy</Link>
           <button type="button" onClick={() => window.dispatchEvent(new Event('dv-cookie-settings'))} style={{ ...link, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>

@@ -1,11 +1,12 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
+import SeoFields, { type SeoValues } from '@/components/admin/SeoFields';
 import { Plus, Edit2, Trash2, Server, Package, Mail, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Save, X, Eye, Edit3, Bold, Italic, List, Link as LinkIcon, Code, AlignLeft, Heading1, Heading2 } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
 interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
-interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; gstRate?: string | number | null; gstInclusive?: boolean; sacCode?: string | null; plans: Plan[]; createdAt: string; }
+interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; gstRate?: string | number | null; gstInclusive?: boolean; sacCode?: string | null; metaTitle?: string | null; metaDescription?: string | null; metaKeywords?: string | null; ogImageUrl?: string | null; plans: Plan[]; createdAt: string; }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={16} />, DOCKER: <Package size={16} />, EMAIL: <Mail size={16} /> };
 
@@ -82,6 +83,34 @@ function GstEditor({ product, onSaved }: { product: Product; onSaved: () => void
           <input className="input" value={sac} onChange={e => setSac(e.target.value)} placeholder="998315" maxLength={8} style={{ width: 110, fontSize: 13, fontFamily: 'var(--font-mono)' }} /></div>
         {dirty && <button type="button" className="btn btn-primary btn-sm" onClick={save} disabled={saving}><Save size={13} /> Save GST</button>}
       </div>
+    </div>
+  );
+}
+
+// ── SEO editor: meta tags + share image used on the public product page and in search/social previews ──
+function SeoEditor({ product, onSaved }: { product: Product; onSaved: () => void }) {
+  const init: SeoValues = { metaTitle: product.metaTitle || '', metaDescription: product.metaDescription || '', metaKeywords: product.metaKeywords || '', ogImageUrl: product.ogImageUrl || '' };
+  const [v, setV] = useState<SeoValues>(init);
+  const [saving, setSaving] = useState(false);
+  const dirty = JSON.stringify(v) !== JSON.stringify(init);
+
+  async function save() {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/products/${product.id}`, {
+        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ metaTitle: v.metaTitle.trim() || null, metaDescription: v.metaDescription.trim() || null, metaKeywords: (v.metaKeywords || '').trim() || null, ogImageUrl: v.ogImageUrl.trim() || null }),
+      });
+      if (res.ok) onSaved(); else { const d = await res.json(); alert(d.error || 'Failed to save SEO settings'); }
+    } finally { setSaving(false); }
+  }
+
+  return (
+    <div style={{ padding: '16px 20px 0' }}>
+      <h3 style={{ fontWeight: 600, fontSize: 14, marginBottom: 4 }}>SEO &amp; sharing</h3>
+      <p style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 10 }}>Blank fields fall back to the product name and description.</p>
+      <SeoFields values={v} onChange={setV} showKeywords fallbackTitle={product.name} fallbackDescription={(product.description || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()} url={`/products/${product.slug}`} />
+      {dirty && <button type="button" className="btn btn-primary btn-sm" style={{ marginTop: 12 }} onClick={save} disabled={saving}><Save size={13} /> Save SEO</button>}
     </div>
   );
 }
@@ -485,6 +514,8 @@ export default function AdminProductsPage() {
                       <div style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-elevated)' }}>
 
                         <GstEditor key={`${product.id}-${product.gstRate}-${product.gstInclusive}-${product.sacCode}`} product={product} onSaved={loadProducts} />
+
+                        <SeoEditor key={`${product.id}-${product.metaTitle}-${product.metaDescription}-${product.metaKeywords}-${product.ogImageUrl}`} product={product} onSaved={loadProducts} />
 
                         {/* Description editor */}
                         <div style={{ padding: '20px 20px 0' }}>
