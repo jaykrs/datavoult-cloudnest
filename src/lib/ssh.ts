@@ -34,6 +34,8 @@ export interface SshOptions {
   timeoutMs?: number;
   /** Max bytes kept per stream; the rest is dropped and `truncated` is set. Default 256 KiB. */
   maxOutputBytes?: number;
+  /** Called with each chunk of output as it arrives (stdout and stderr interleaved), e.g. for live logs. */
+  onOutput?: (chunk: string) => void;
 }
 
 /**
@@ -80,8 +82,8 @@ export function runSsh(target: SshTarget, command: string, opts: SshOptions = {}
           return next;
         };
 
-        stream.on('data', (d: Buffer) => { stdout = append(stdout, d); });
-        stream.stderr.on('data', (d: Buffer) => { stderr = append(stderr, d); });
+        stream.on('data', (d: Buffer) => { stdout = append(stdout, d); opts.onOutput?.(d.toString('utf8')); });
+        stream.stderr.on('data', (d: Buffer) => { stderr = append(stderr, d); opts.onOutput?.(d.toString('utf8')); });
         stream.on('close', (code: number | null) => {
           finish(() => resolve({ code, stdout, stderr, truncated, hostKeySha256: observedHostKey }));
         });
