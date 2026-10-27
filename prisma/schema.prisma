@@ -34,6 +34,7 @@ model User {
   paymentRequests PaymentRequest[]
   invoices      Invoice[]
   blogPosts     BlogPost[]
+  deployments   Deployment[]
   sessions      Session[]
   supportTickets SupportTicket[]
 
@@ -131,6 +132,7 @@ model Subscription {
   payments     Payment[]
   serviceConfig ServiceConfig?
   provisioningJob ProvisioningJob?
+  deployments   Deployment[]
 
   @@index([status, renewsAt])
   @@map("subscriptions")
@@ -462,4 +464,51 @@ enum Priority {
   MEDIUM
   HIGH
   CRITICAL
+}
+
+enum DeploymentMode {
+  PM2
+  DOCKER
+}
+
+enum HttpsMode {
+  NONE
+  SELF_SIGNED
+  LETSENCRYPT
+}
+
+enum DeploymentStatus {
+  DEPLOYING
+  RUNNING
+  FAILED
+}
+
+/// A customer application deployed (git clone, build, run, nginx proxy) onto their VPS.
+model Deployment {
+  id             String           @id @default(cuid())
+  subscriptionId String
+  userId         String
+  /// Safe name used for the process/container/nginx file (derived from repo name + port).
+  appName        String           @db.VarChar(80)
+  repoUrl        String           @db.VarChar(500)
+  branch         String           @db.VarChar(100)
+  port           Int
+  mode           DeploymentMode
+  httpsMode      HttpsMode
+  domain         String?          @db.VarChar(253)
+  /// Encrypted JSON array of {key,value} environment variables (see src/lib/crypto.ts). Never returned to clients.
+  envEnc         String?          @db.LongText
+  status         DeploymentStatus @default(DEPLOYING)
+  /// Tail of the latest run's output.
+  log            String?          @db.LongText
+  lastDeployedAt DateTime?
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id])
+
+  @@unique([subscriptionId, port])
+  @@index([userId])
+  @@map("deployments")
 }

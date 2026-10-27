@@ -263,6 +263,20 @@ The app uses a custom CSS design system defined in `globals.css`:
 - **`/sitemap.xml`** lists static pages, active products and published posts; **`/robots.txt`** blocks admin, API, checkout and other private areas and links the sitemap. Set `APP_URL` in production so these use your real domain.
 - Apply the new migration with `npx prisma migrate deploy`.
 
+## 🚀 App Deployments (VPS)
+
+Customers with an active VPS open **Services → Deploy app** (`/services/:id/deploy`) to deploy a Next.js / Node.js repo to their server over SSH (credentials are looked up server-side and never reach the browser):
+
+1. clone the repo (public, or private with an access token that is used for the clone only and never stored),
+2. write the custom environment variables (stored encrypted; values are never shown again) and force `PORT`,
+3. build and run **either** with Node.js + PM2 **or** in Docker (the repo's `Dockerfile`, or a generated Node one),
+4. proxy nginx port 80/443 to `127.0.0.1:<port>` with websocket support,
+5. HTTPS: Let's Encrypt when a domain pointing at the server is given, otherwise a self-signed certificate on the IP (browsers warn until a domain is added), or HTTP only.
+
+Deployments are saved with live logs, can be redeployed (new code, branch or env) and removed (stops the app and deletes its nginx config and files). A failed build leaves the previous version running.
+
+Requirements on the server: Debian/Ubuntu with root or passwordless sudo (nginx, certbot and Docker are installed with apt when missing); for the PM2 mode Node.js 18+ must already be installed (CloudOps → Install). Only one app without a domain can use the server's IP on 80/443; give others a domain. API: `POST/GET /api/deployments`, `GET/DELETE /api/deployments/:id`, `POST /api/deployments/:id/redeploy`. Run `npx prisma migrate deploy` for the new `deployments` table.
+
 ## 💳 Pricing & Payments
 
 - **Per-day pricing in ₹**: a plan's price is the cost of **one day**. Customers choose a number of days (**minimum 30**, maximum 1095) at checkout and pay `price × days`. The total is always computed on the server in integer paise (`src/lib/pricing.ts`); the browser never sends an amount. The subscription runs for exactly the purchased days, and renewals add days from the later of "now" and the current end date.
