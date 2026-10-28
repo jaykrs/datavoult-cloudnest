@@ -2,6 +2,7 @@ import type { Metadata } from 'next';
 import './globals.css';
 import CookieConsent from '@/components/ui/CookieConsent';
 import Analytics from '@/components/ui/Analytics';
+import SessionGuard from '@/components/ui/SessionGuard';
 import { getSiteUrl } from '@/lib/seo';
 
 export const metadata: Metadata = {
@@ -15,6 +16,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
     <html lang="en" className="noise">
       <body>
         {children}
+        <SessionGuard />
         <Analytics />
         <CookieConsent />
       </body>

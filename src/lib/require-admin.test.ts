@@ -5,13 +5,24 @@ const h = vi.hoisted(() => ({ token: undefined as string | undefined, dbUser: nu
 vi.mock('next/headers', () => ({ cookies: () => ({ get: () => (h.token ? { value: h.token } : undefined) }) }));
 vi.mock('./prisma', () => ({ prisma: { user: { findUnique: async () => h.dbUser } } }));
 
-import { requireAdmin, isAdminSession, isAdminRole } from './auth';
+import { requireAuth, requireAdmin, isAdminSession, isAdminRole } from './auth';
 
 async function tokenFor(role: string) {
   return new SignJWT({ userId: 'u1', email: 'a@b.c', role }).setProtectedHeader({ alg: 'HS256' }).setExpirationTime('1h').sign(new TextEncoder().encode('x'.repeat(48)));
 }
 
 beforeEach(() => { process.env.JWT_SECRET = 'x'.repeat(48); h.token = undefined; h.dbUser = null; });
+
+describe('requireAuth', () => {
+  it('rejects a valid token whose user no longer exists (deleted / database reset)', async () => {
+    h.token = await tokenFor('USER'); h.dbUser = null;
+    await expect(requireAuth()).rejects.toThrow('UNAUTHORIZED');
+  });
+  it('returns the current role from the database, not the token', async () => {
+    h.token = await tokenFor('ADMIN'); h.dbUser = { role: 'USER' };
+    expect((await requireAuth()).role).toBe('USER');
+  });
+});
 
 describe('requireAdmin', () => {
   it('rejects anonymous callers', async () => { await expect(requireAdmin()).rejects.toThrow('UNAUTHORIZED'); });
