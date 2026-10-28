@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError, createProductSchema, getPaginationParams, buildPaginationMeta } from '@/lib/api';
-import { requireAdmin, getSession } from '@/lib/auth';
+import { requireAdmin, isAdminSession } from '@/lib/auth';
 import { publicInStockWhere, serializeProduct } from '@/lib/inventory';
 import { z } from 'zod';
 
@@ -9,7 +9,7 @@ export async function GET(req: NextRequest) {
   try {
     const url = new URL(req.url);
     const category = url.searchParams.get('category');
-    const isAdmin = (await getSession())?.role === 'ADMIN';
+    const isAdmin = await isAdminSession();
     // Visitors only ever see live, in-stock products; admins can ask for everything.
     const status = isAdmin ? url.searchParams.get('status') || 'ACTIVE' : 'ACTIVE';
     const { page, limit, skip } = getPaginationParams(req);

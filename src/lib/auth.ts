@@ -51,20 +51,48 @@ export async function getSession(): Promise<JWTPayload | null> {
   return await verifyToken(token);
 }
 
+/**
+ * A signed-in, still-existing user. The JWT only proves who logged in up to 7 days ago, so the
+ * account is confirmed in the database on every call: a deleted user (e.g. after a database
+ * reset) or a demoted admin is rejected immediately, and the role used is the CURRENT one.
+ */
 export async function requireAuth(): Promise<JWTPayload> {
   const session = await getSession();
-  if (!session) {
+  if (!session || typeof session.userId !== 'string') {
     throw new Error('UNAUTHORIZED');
   }
+  const { prisma } = await import('./prisma');
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true, role: true } });
+  if (!user) throw new Error('UNAUTHORIZED');
+  return { ...session, email: user.email, role: user.role };
+}
+
+export function isAdminRole(role: unknown): boolean {
+  return role === 'ADMIN' || role === 'SUPER_ADMIN';
+}
+
+/**
+ * Admin-only gate for every state-changing admin action (products, plans, blog,
+ * payment approval, provisioning, ...).
+ *
+ * The role in the JWT is only a hint: a token lives for 7 days, so a demoted or
+ * deleted admin would otherwise keep their powers until it expired. The role is
+ * therefore re-read from the database on every call.
+ */
+export async function requireAdmin(): Promise<JWTPayload> {
+  const session = await requireAuth(); // role comes from the database, not the token
+  if (!isAdminRole(session.role)) throw new Error('FORBIDDEN');
   return session;
 }
 
-export async function requireAdmin(): Promise<JWTPayload> {
-  const session = await requireAuth();
-  if (session.role !== 'ADMIN' && session.role !== 'SUPER_ADMIN') {
-    throw new Error('FORBIDDEN');
+/** True only for a signed-in admin whose role is confirmed in the database (for admin-only views of public endpoints). */
+export async function isAdminSession(): Promise<boolean> {
+  try {
+    await requireAdmin();
+    return true;
+  } catch {
+    return false;
   }
-  return session;
 }
 
 /** Set-Cookie value for the session cookie (token = null clears it). */

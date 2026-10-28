@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError, updateProductSchema } from '@/lib/api';
-import { requireAdmin, getSession } from '@/lib/auth';
+import { requireAdmin, isAdminSession } from '@/lib/auth';
 import { serializeProduct } from '@/lib/inventory';
 import { z } from 'zod';
 
@@ -17,7 +17,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
     });
 
     if (!product) return apiError('Product not found', 404);
-    const isAdmin = (await getSession())?.role === 'ADMIN';
+    const isAdmin = await isAdminSession();
     // Sold-out products stay reachable by direct link (shown as unavailable) so
     // bookmarks and existing customers don't hit a 404; they just can't be bought.
     return apiSuccess({ product: serializeProduct(product, isAdmin) });
