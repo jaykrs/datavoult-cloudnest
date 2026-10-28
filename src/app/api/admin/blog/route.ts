@@ -6,6 +6,7 @@ import { sanitizeBlogHtml } from '@/lib/html-sanitize';
 import { slugify, uniqueSlug } from '@/lib/slug';
 import { stripHtml } from '@/lib/seo';
 import { z } from 'zod';
+import { BlogStatus } from '@prisma/client';
 
 /** GET /api/admin/blog — all posts (drafts included), newest first. */
 export async function GET(req: NextRequest) {
@@ -18,10 +19,12 @@ export async function GET(req: NextRequest) {
     const { page, limit, skip } = getPaginationParams(req);
 
     const where = {
-      ...(status === 'DRAFT' || status === 'PUBLISHED' ? { status } : {}),
-      ...(categoryId ? { categoryId } : {}),
-      ...(search ? { OR: [{ title: { contains: search } }, { slug: { contains: search } }] } : {}),
-    };
+  ...(status === 'DRAFT' || status === 'PUBLISHED' 
+    ? { status: status as BlogStatus } // Explicitly cast the checked string to the enum type
+    : {}),
+  ...(categoryId ? { categoryId } : {}),
+  ...(search ? { OR: [{ title: { contains: search } }, { slug: { contains: search } }] } : {}),
+  };
     const [posts, total, drafts] = await Promise.all([
       prisma.blogPost.findMany({
         where, skip, take: limit, orderBy: { updatedAt: 'desc' },
