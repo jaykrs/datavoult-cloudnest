@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError, getPaginationParams, buildPaginationMeta } from '@/lib/api';
+import { stripStock } from '@/lib/inventory';
 import { requireAuth } from '@/lib/auth';
 import { publicServiceConfig, publicPaymentFields } from '@/lib/serializers';
 import type { SubscriptionStatus } from '@prisma/client';
@@ -36,7 +37,7 @@ export async function GET(req: NextRequest) {
       }),
       prisma.subscription.count({ where }),
     ]);
-    return apiSuccess({ subscriptions, meta: buildPaginationMeta(total, page, limit) });
+    return apiSuccess(stripStock({ subscriptions, meta: buildPaginationMeta(total, page, limit) }));
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     console.error('[subscriptions GET]', e);

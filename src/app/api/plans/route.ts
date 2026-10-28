@@ -20,6 +20,7 @@ export async function POST(req: NextRequest) {
         description: data.description,
         price: data.price,
         isPopular: data.isPopular,
+        inventoryCount: data.inventoryCount ?? null,
         limits: data.limits as object,
       },
     });

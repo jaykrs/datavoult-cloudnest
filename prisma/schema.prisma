@@ -101,6 +101,9 @@ model Plan {
   /// Soft delete: existing subscriptions keep referencing the plan, but it is
   /// hidden from the catalogue and cannot be purchased.
   isDeleted     Boolean  @default(false)
+  /// Units of this plan left to sell. NULL = not tracked (unlimited). At 0 the plan is hidden
+  /// from the public catalogue and cannot be bought. New subscriptions use one unit.
+  inventoryCount Int?
   limits        Json
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt

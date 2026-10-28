@@ -5,7 +5,7 @@ import SeoFields, { type SeoValues } from '@/components/admin/SeoFields';
 import { Plus, Edit2, Trash2, Server, Package, Mail, ToggleLeft, ToggleRight, ChevronDown, ChevronUp, Save, X, Eye, Edit3, Bold, Italic, List, Link as LinkIcon, Code, AlignLeft, Heading1, Heading2 } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
-interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string | number>; description?: string; }
+interface Plan { id: string; name: string; price: number; isPopular: boolean; limits: Record<string, string | number>; description?: string; inventoryCount?: number | null; }
 interface Product { id: string; name: string; slug: string; description: string; category: string; status: string; inventoryCount?: number | null; gstRate?: string | number | null; gstInclusive?: boolean; sacCode?: string | null; metaTitle?: string | null; metaDescription?: string | null; metaKeywords?: string | null; ogImageUrl?: string | null; plans: Plan[]; createdAt: string; }
 
 const catIcon: Record<string, React.ReactNode> = { VPS: <Server size={16} />, DOCKER: <Package size={16} />, EMAIL: <Mail size={16} /> };
@@ -205,7 +205,7 @@ export default function AdminProductsPage() {
   const [descDraft, setDescDraft] = useState('');
   const [savingDesc, setSavingDesc] = useState(false);
   const [showPlanForm, setShowPlanForm] = useState<string | null>(null);
-  const [planForm, setPlanForm] = useState({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}' });
+  const [planForm, setPlanForm] = useState({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}', inventoryCount: '' });
 
   // ============================================
   // DEVELOPER: @Simran Samir : UPDATE PLAN FEATURE - NEW STATE VARIABLES
@@ -217,8 +217,7 @@ export default function AdminProductsPage() {
     price: '', 
     isPopular: false, 
     description: '', 
-    limitsRaw: '{}' 
-  });
+    limitsRaw: '{}', inventoryCount: '' });
 
   const [form, setForm] = useState({ name: '', slug: '', description: '', category: 'VPS', features: '', specs: '{}', inventoryCount: '', gstRate: '', gstInclusive: 'in' });
 
@@ -288,7 +287,16 @@ export default function AdminProductsPage() {
     setProducts(prev => prev.filter(p => p.id !== id));
   }
 
+  /** '' = unlimited (null); otherwise a whole number >= 0. Returns undefined when invalid. */
+  function parseStock(raw: string): number | null | undefined {
+    const t = raw.trim();
+    if (t === '') return null;
+    return /^\d+$/.test(t) ? Number(t) : undefined;
+  }
+
   async function handleAddPlan(productId: string) {
+    const stock = parseStock(planForm.inventoryCount);
+    if (stock === undefined) { alert('Stock must be a whole number (or blank for unlimited)'); return; }
     try {
       let limits: Record<string, string | number> = {};
       try { limits = JSON.parse(planForm.limitsRaw); } catch { alert('Invalid JSON in limits'); return; }
@@ -300,12 +308,13 @@ export default function AdminProductsPage() {
           description: planForm.description || undefined,
           price: parseFloat(planForm.price),
           isPopular: planForm.isPopular,
+          inventoryCount: stock,
           limits,
         }),
       });
       if (res.ok) {
         setShowPlanForm(null);
-        setPlanForm({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}' });
+        setPlanForm({ name: '', price: '', isPopular: false, description: '', limitsRaw: '{}', inventoryCount: '' });
         loadProducts();
       } else { const d = await res.json(); alert(d.error || 'Failed'); }
     } catch (err) { alert('Error creating plan'); }
@@ -314,13 +323,15 @@ export default function AdminProductsPage() {
   async function handlePlanDelete(id : string){
  if (!confirm('Delete this plan? This cannot be undone.')) return;
     await fetch(`/api/plans/${id}`, { method: 'DELETE' });
-    setProducts(prev => prev.filter(p => p.id !== id));
+    loadProducts();
 	}
   // ============================================
   // DEVELOPER: @Simran Samir: UPDATE PLAN FEATURE - HANDLE UPDATE PLAN FUNCTION
   // This function makes a PUT request to update an existing plan
   // ============================================
   async function handleUpdatePlan(productId: string, planId: string) {
+    const stock = parseStock(editPlanForm.inventoryCount);
+    if (stock === undefined) { alert('Stock must be a whole number (or blank for unlimited)'); return; }
     try {
       let limits: Record<string, string | number> = {};
       try { 
@@ -338,6 +349,7 @@ export default function AdminProductsPage() {
           description: editPlanForm.description || undefined,
           price: parseFloat(editPlanForm.price),
           isPopular: editPlanForm.isPopular,
+          inventoryCount: stock,
           limits,
         }),
       });
@@ -349,7 +361,8 @@ export default function AdminProductsPage() {
           price: '', 
                 isPopular: false, 
           description: '', 
-          limitsRaw: '{}' 
+          limitsRaw: '{}', 
+          inventoryCount: '' 
         });
         loadProducts(); // Refresh the products list
       } else { 
@@ -373,6 +386,7 @@ export default function AdminProductsPage() {
       isPopular: plan.isPopular,
       description: plan.description || '',
       limitsRaw: JSON.stringify(plan.limits, null, 2),
+      inventoryCount: plan.inventoryCount === null || plan.inventoryCount === undefined ? '' : String(plan.inventoryCount),
     });
   }
 
@@ -571,6 +585,10 @@ export default function AdminProductsPage() {
                                   <label className="label">Limits (JSON)</label>
                                   <input className="input" value={planForm.limitsRaw} onChange={e => setPlanForm(f => ({ ...f, limitsRaw: e.target.value }))} placeholder='{"cpu":"2 vCPUs","ram":"4 GB","storage":"80 GB"}' style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
                                 </div>
+                                <div>
+                                  <label className="label">Stock (blank = unlimited)</label>
+                                  <input className="input" type="number" min={0} step={1} value={planForm.inventoryCount} onChange={e => setPlanForm(f => ({ ...f, inventoryCount: e.target.value }))} placeholder="Unlimited" style={{ fontSize: 13 }} />
+                                </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <input type="checkbox" id={`popular-${product.id}`} checked={planForm.isPopular} onChange={e => setPlanForm(f => ({ ...f, isPopular: e.target.checked }))} style={{ cursor: 'pointer' }} />
                                   <label htmlFor={`popular-${product.id}`} style={{ fontSize: 13, color: 'var(--text-secondary)', cursor: 'pointer' }}>Mark as Popular</label>
@@ -610,6 +628,10 @@ export default function AdminProductsPage() {
                                 <div style={{ gridColumn: '1 / -1' }}>
                                   <label className="label">Limits (JSON)</label>
                                   <input className="input" value={editPlanForm.limitsRaw} onChange={e => setEditPlanForm(f => ({ ...f, limitsRaw: e.target.value }))} placeholder='{"cpu":"2 vCPUs","ram":"4 GB","storage":"80 GB"}' style={{ fontFamily: 'var(--font-mono)', fontSize: 12 }} />
+                                </div>
+                                <div>
+                                  <label className="label">Stock (blank = unlimited)</label>
+                                  <input className="input" type="number" min={0} step={1} value={editPlanForm.inventoryCount} onChange={e => setEditPlanForm(f => ({ ...f, inventoryCount: e.target.value }))} placeholder="Unlimited" style={{ fontSize: 13 }} />
                                 </div>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                                   <input type="checkbox" id={`edit-popular-${product.id}`} checked={editPlanForm.isPopular} onChange={e => setEditPlanForm(f => ({ ...f, isPopular: e.target.checked }))} style={{ cursor: 'pointer' }} />
@@ -665,6 +687,9 @@ export default function AdminProductsPage() {
                                   </button>
                                   
 
+                                  </div>
+                                  <div style={{ fontSize: 11, marginBottom: 6, color: plan.inventoryCount === 0 ? 'var(--red)' : 'var(--text-muted)' }}>
+                                    {plan.inventoryCount === null || plan.inventoryCount === undefined ? 'Stock: unlimited' : plan.inventoryCount === 0 ? 'Sold out — hidden from customers' : `Stock: ${plan.inventoryCount} left`}
                                   </div>
                                   <div style={{ fontFamily: 'var(--font-display)', fontSize: 24, marginBottom: 8 }}>₹{Number(plan.price).toFixed(2)}<span style={{ fontSize: 12, color: 'var(--text-muted)' }}>/day</span></div>
                                   <div style={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

@@ -18,7 +18,7 @@ const { FakeKnownRequestError, runProvisioning, notifyOrderSubscribed, issueInvo
     db: {
       product: { findUnique: vi.fn(), updateMany: vi.fn() },
       payment: { findUnique: vi.fn(), create: vi.fn() },
-      plan: { findFirst: vi.fn() },
+      plan: { findFirst: vi.fn(), updateMany: vi.fn() },
       subscription: { findFirst: vi.fn(), create: vi.fn(), update: vi.fn() },
       $transaction: vi.fn(),
     },
@@ -194,6 +194,40 @@ describe('fulfillPayment — inventory', () => {
   it('sends the order notification for new subscriptions only', async () => {
     await fulfillPayment(input);
     expect(notifyOrderSubscribed).toHaveBeenCalledWith('sub_new');
+  });
+});
+
+describe('fulfillPayment — plan inventory', () => {
+  beforeEach(() => { db.plan.updateMany.mockResolvedValue({ count: 1 }); });
+
+  it('does not touch stock for unlimited (null) plans', async () => {
+    db.plan.findFirst.mockResolvedValue({ ...plan, inventoryCount: null });
+    await fulfillPayment(input);
+    expect(db.plan.updateMany).not.toHaveBeenCalled();
+  });
+
+  it('takes one plan unit with a conditional atomic update', async () => {
+    db.plan.findFirst.mockResolvedValue({ ...plan, inventoryCount: 2 });
+    await fulfillPayment(input);
+    expect(db.plan.updateMany).toHaveBeenCalledWith({
+      where: { id: 'plan_1', inventoryCount: { gt: 0 } },
+      data: { inventoryCount: { decrement: 1 } },
+    });
+  });
+
+  it('fails with OUT_OF_STOCK and creates nothing when the last plan unit is gone', async () => {
+    db.plan.findFirst.mockResolvedValue({ ...plan, inventoryCount: 1 });
+    db.plan.updateMany.mockResolvedValue({ count: 0 });
+    await expect(fulfillPayment(input)).rejects.toMatchObject({ code: 'OUT_OF_STOCK' });
+    expect(db.subscription.create).not.toHaveBeenCalled();
+    expect(db.payment.create).not.toHaveBeenCalled();
+  });
+
+  it('does not consume plan stock on renewal', async () => {
+    db.plan.findFirst.mockResolvedValue({ ...plan, inventoryCount: 0 });
+    db.subscription.findFirst.mockResolvedValue({ id: 'sub_1', planId: 'plan_1', status: 'ACTIVE', renewsAt: new Date() });
+    await fulfillPayment({ ...input, notes: { ...notes, subscriptionId: 'sub_1' } });
+    expect(db.plan.updateMany).not.toHaveBeenCalled();
   });
 });
 

@@ -16,6 +16,7 @@ const PUBLIC_PATHS = [
   '/privacy',
   '/contact',
   '/blog',
+  '/docs',
   '/checkout',          // checkout handles its own auth redirect client-side
   '/api/auth',
   '/api/media',         // blog/product images are shown to everyone

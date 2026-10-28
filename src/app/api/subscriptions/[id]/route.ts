@@ -1,6 +1,7 @@
 import { NextRequest } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError } from '@/lib/api';
+import { stripStock } from '@/lib/inventory';
 import { requireAuth } from '@/lib/auth';
 import { publicServiceConfig, publicPaymentFields } from '@/lib/serializers';
 import { z } from 'zod';
@@ -20,7 +21,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       },
     });
     if (!subscription) return apiError('Subscription not found', 404);
-    return apiSuccess({ subscription });
+    return apiSuccess(stripStock({ subscription }));
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     console.error('[subscriptions/:id GET]', e);
@@ -52,7 +53,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       include: { product: true, plan: true, serviceConfig: publicServiceConfig },
     });
 
-    return apiSuccess({ subscription: updated });
+    return apiSuccess(stripStock({ subscription: updated }));
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     if (e instanceof z.ZodError) return apiError('Only "label" can be changed');
@@ -68,7 +69,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       where: { id: params.id, userId: session.userId as string },
     });
     if (!subscription) return apiError('Subscription not found', 404);
-    if (subscription.status === 'CANCELLED') return apiSuccess({ subscription });
+    if (subscription.status === 'CANCELLED') return apiSuccess(stripStock({ subscription }));
 
     // Cancelling stops renewal; the paid-through date is kept as endDate and
     // the billing cron moves the subscription to EXPIRED once it passes.
@@ -77,7 +78,7 @@ export async function DELETE(_req: NextRequest, { params }: Params) {
       data: { status: 'CANCELLED', cancelledAt: new Date(), endDate: subscription.renewsAt },
     });
 
-    return apiSuccess({ subscription: updated });
+    return apiSuccess(stripStock({ subscription: updated }));
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     console.error('[subscriptions/:id DELETE]', e);

@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma';
 import { getSiteUrl } from '@/lib/seo';
 import { buildSitemapEntries } from '@/lib/sitemap';
 import { publishedWhere } from '@/lib/blog';
+import { listDocs } from '@/lib/docs';
 
 // Built per request (cached briefly) so new products/posts appear without a redeploy.
 export const dynamic = 'force-dynamic';
@@ -20,5 +21,5 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     // A database hiccup must not break crawling of the static pages.
     console.error('[sitemap] database unavailable, serving static pages only:', (e as Error).message);
   }
-  return buildSitemapEntries({ siteUrl: getSiteUrl(), products, posts });
+  return buildSitemapEntries({ siteUrl: getSiteUrl(), products, posts, docs: listDocs().map((d) => d.slug) });
 }

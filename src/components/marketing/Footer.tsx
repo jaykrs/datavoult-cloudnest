@@ -10,6 +10,7 @@ export default function Footer() {
         <nav style={{ display: 'flex', flexWrap: 'wrap', gap: 20 }}>
           <Link href="/products" style={link}>Products</Link>
           <Link href="/pricing" style={link}>Pricing</Link>
+          <Link href="/docs" style={link}>Docs</Link>
           <Link href="/blog" style={link}>Blog</Link>
           <Link href="/contact" style={link}>Contact</Link>
           <Link href="/privacy" style={link}>Privacy Policy</Link>

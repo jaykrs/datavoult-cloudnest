@@ -64,6 +64,7 @@ export async function prepareOrder(input: {
     if (existing) throw new OrderError(409, 'You already have a subscription to this product');
     // Renewals bypass this: people already on the product keep their service.
     if (!isInStock(plan.product.inventoryCount)) throw new OrderError(409, 'This product is currently out of stock');
+    if (!isInStock(plan.inventoryCount)) throw new OrderError(409, 'This plan is currently sold out');
   }
 
   const amounts = computeOrderAmounts(plan.price.toNumber(), days, gstSettingFrom(plan.product));
