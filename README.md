@@ -291,6 +291,14 @@ Requirements on the server: Debian/Ubuntu with root or passwordless sudo (nginx,
 
 A customer with an active **Docker** product gets **Services → Deploy container** (same page, Docker-only): they paste a GitHub access token (read-only *Contents* + *Metadata*; used for the session only, never stored), click *Load my repos*, and pick from their repositories that have a `Dockerfile` at the root (or paste any repo URL). The repo is built and run as a container **on that subscription's own Docker host** (the server details the admin provisioned) — never on a VPS — using the repo's own Dockerfile (nothing is generated; a missing Dockerfile fails the deploy with a clear message). The plan's limits apply: number of containers (`containers`), memory per container (`ram`), and containers run with a PID cap and `no-new-privileges`. nginx/HTTPS, env vars, redeploy and remove work as for VPS apps.
 
+## 📚 Public documentation
+
+`/docs` is a public, Confluence-style documentation site (page tree, content, "on this page" links, previous/next) rendered from the Markdown files in [`/docs`](docs). To add or change a page edit or add `docs/<slug>.md` with optional front-matter (`title`, `order`, `summary`, `updated: YYYY-MM-DD`), commit and deploy — the sidebar and `sitemap.xml` update automatically. HTML in Markdown is sanitised. Pages are read at build time, so a rebuild is needed after editing.
+
+## 📦 Plan stock
+
+Each plan has its own optional **stock** (blank = unlimited) next to the product's stock. A new subscription uses one unit of both atomically; at 0 the plan disappears from the catalogue and cannot be ordered (other plans stay available, and a product whose plans are all sold out shows as unavailable). Renewals never consume or require stock. Run `npx prisma migrate deploy` for the new column.
+
 ## 💳 Pricing & Payments
 
 - **Per-day pricing in ₹**: a plan's price is the cost of **one day**. Customers choose a number of days (**minimum 30**, maximum 1095) at checkout and pay `price × days`. The total is always computed on the server in integer paise (`src/lib/pricing.ts`); the browser never sends an amount. The subscription runs for exactly the purchased days, and renewals add days from the later of "now" and the current end date.

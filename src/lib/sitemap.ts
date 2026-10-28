@@ -11,6 +11,7 @@ const STATIC_PAGES: Array<{ path: string; priority: number; changeFrequency: Sit
   { path: '/products', priority: 0.9, changeFrequency: 'weekly' },
   { path: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/blog', priority: 0.8, changeFrequency: 'daily' },
+  { path: '/docs', priority: 0.7, changeFrequency: 'monthly' },
   { path: '/contact', priority: 0.4, changeFrequency: 'monthly' },
   { path: '/privacy', priority: 0.2, changeFrequency: 'monthly' },
 ];
@@ -24,6 +25,8 @@ export function buildSitemapEntries(input: {
   siteUrl: string;
   products: Array<{ slug: string; updatedAt: Date }>;
   posts: Array<{ slug: string; updatedAt: Date; publishedAt: Date | null }>;
+  /** Slugs of the documentation pages other than the index (which is /docs). */
+  docs?: string[];
 }): SitemapEntry[] {
   const at = (path: string) => `${input.siteUrl}${path}`;
   const entries: SitemapEntry[] = STATIC_PAGES.map((p) => ({
@@ -34,6 +37,9 @@ export function buildSitemapEntries(input: {
   }
   for (const post of input.posts) {
     entries.push({ url: at(`/blog/${encodeURIComponent(post.slug)}`), lastModified: post.updatedAt, changeFrequency: 'monthly', priority: 0.6 });
+  }
+  for (const slug of input.docs ?? []) {
+    if (slug !== 'index') entries.push({ url: at(`/docs/${encodeURIComponent(slug)}`), changeFrequency: 'monthly', priority: 0.6 });
   }
   return entries;
 }

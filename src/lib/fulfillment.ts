@@ -138,6 +138,17 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
         }
       }
 
+      // Same for the plan's own stock. Skipped entirely for untracked (null) plans.
+      if (plan.inventoryCount !== null && plan.inventoryCount !== undefined) {
+        const takenPlan = await tx.plan.updateMany({
+          where: { id: plan.id, inventoryCount: { gt: 0 } },
+          data: { inventoryCount: { decrement: 1 } },
+        });
+        if (takenPlan.count === 0) {
+          throw new FulfillmentError('OUT_OF_STOCK', `Plan ${plan.id} is sold out`);
+        }
+      }
+
       const created = await tx.subscription.create({
         data: {
           userId: notes.userId,

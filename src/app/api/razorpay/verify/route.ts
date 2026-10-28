@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server';
 import crypto from 'crypto';
 import { prisma } from '@/lib/prisma';
 import { apiSuccess, apiError } from '@/lib/api';
+import { stripStock } from '@/lib/inventory';
 import { requireAuth } from '@/lib/auth';
 import { safeEqual } from '@/lib/crypto';
 import { fulfillPayment, FulfillmentError } from '@/lib/fulfillment';
@@ -80,7 +81,7 @@ export async function POST(req: NextRequest) {
         })
       : null;
 
-    return apiSuccess({ subscription, outcome: result.outcome }, result.outcome === 'created' ? 201 : 200);
+    return apiSuccess(stripStock({ subscription, outcome: result.outcome }), result.outcome === 'created' ? 201 : 200);
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     if (e instanceof z.ZodError) return apiError(e.errors[0].message);

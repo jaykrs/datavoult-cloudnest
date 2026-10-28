@@ -143,6 +143,8 @@ export const createPlanSchema = z.object({
   price: z.number().positive('Price per day must be greater than 0').max(100_000)
     .refine((n) => Math.abs(n * 100 - Math.round(n * 100)) < 1e-6, 'Price per day can have at most 2 decimals'),
   isPopular: z.boolean().default(false),
+  /** Units left to sell; null/omitted = unlimited. 0 hides the plan from visitors. */
+  inventoryCount: z.number().int().min(0).max(1_000_000).nullable().optional(),
   limits: z.record(z.unknown()),
 });
 
