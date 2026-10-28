@@ -38,6 +38,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Public paths skip login, but never for writes to the catalogue: products and plans
+  // may only be created, changed or deleted by an admin (the handlers re-check against the
+  // database; this is a second, earlier layer).
+  const isWrite = !['GET', 'HEAD', 'OPTIONS'].includes(request.method);
+  if (isWrite && (pathname === '/api/products' || pathname.startsWith('/api/products/') || pathname === '/api/plans' || pathname.startsWith('/api/plans/'))) {
+    const t = request.cookies.get('auth-token')?.value;
+    const p = t ? await verifyToken(t) : null;
+    if (!p) return NextResponse.json({ success: false, error: 'Unauthorized' }, { status: 401 });
+    if (p.role !== 'ADMIN' && p.role !== 'SUPER_ADMIN') return NextResponse.json({ success: false, error: 'Forbidden' }, { status: 403 });
+    return NextResponse.next();
+  }
+
   // Allow all public paths
   if (PUBLIC_PATHS.some(p => pathname === p || pathname.startsWith(p + '/'))) {
     return NextResponse.next();

@@ -59,12 +59,37 @@ export async function requireAuth(): Promise<JWTPayload> {
   return session;
 }
 
+export function isAdminRole(role: unknown): boolean {
+  return role === 'ADMIN' || role === 'SUPER_ADMIN';
+}
+
+/**
+ * Admin-only gate for every state-changing admin action (products, plans, blog,
+ * payment approval, provisioning, ...).
+ *
+ * The role in the JWT is only a hint: a token lives for 7 days, so a demoted or
+ * deleted admin would otherwise keep their powers until it expired. The role is
+ * therefore re-read from the database on every call.
+ */
 export async function requireAdmin(): Promise<JWTPayload> {
   const session = await requireAuth();
-  if (session.role !== 'ADMIN' && session.role !== 'SUPER_ADMIN') {
-    throw new Error('FORBIDDEN');
+  if (!isAdminRole(session.role)) throw new Error('FORBIDDEN');
+
+  const { prisma } = await import('./prisma');
+  const user = await prisma.user.findUnique({ where: { id: session.userId as string }, select: { role: true } });
+  if (!user) throw new Error('UNAUTHORIZED');
+  if (!isAdminRole(user.role)) throw new Error('FORBIDDEN');
+  return { ...session, role: user.role };
+}
+
+/** True only for a signed-in admin whose role is confirmed in the database (for admin-only views of public endpoints). */
+export async function isAdminSession(): Promise<boolean> {
+  try {
+    await requireAdmin();
+    return true;
+  } catch {
+    return false;
   }
-  return session;
 }
 
 /** Set-Cookie value for the session cookie (token = null clears it). */
