@@ -1,6 +1,7 @@
 import { prisma } from '../prisma';
 import { encryptJson } from '../crypto';
 import { manualProvider, mockProvider } from './providers';
+import { notifyServerDetails } from '../notifications';
 import type { ProvisioningProvider } from './types';
 
 export const MAX_PROVISIONING_ATTEMPTS = 3;
@@ -94,6 +95,8 @@ export async function runProvisioning(subscriptionId: string): Promise<Provision
       }),
       prisma.provisioningJob.update({ where: { subscriptionId }, data: { status: 'DONE' } }),
     ]);
+    // Automated providers hand over credentials too: tell the customer (never throws).
+    if (credentials) await notifyServerDetails(subscriptionId);
     return 'done';
   } catch (e) {
     console.error('[provisioning]', subscriptionId, e);

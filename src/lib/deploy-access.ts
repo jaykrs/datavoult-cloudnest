@@ -2,6 +2,7 @@ import { prisma } from './prisma';
 import { decryptJson } from './crypto';
 import { SshError, type SshTarget } from './ssh';
 import { apiError } from './api';
+import { sshPortOf } from './server-details';
 
 /** An error that maps directly to an HTTP response. */
 export class AccessError extends Error {
@@ -50,6 +51,7 @@ export async function loadServerAccess(subscriptionId: string, userId: string): 
     serviceConfigId: cfg.id,
     target: {
       host: cfg.ipAddress,
+      port: sshPortOf(cfg.config),
       username: creds.username,
       password: creds.password,
       privateKey: creds.privateKey,

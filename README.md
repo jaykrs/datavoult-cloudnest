@@ -263,6 +263,16 @@ The app uses a custom CSS design system defined in `globals.css`:
 - **`/sitemap.xml`** lists static pages, active products and published posts; **`/robots.txt`** blocks admin, API, checkout and other private areas and links the sitemap. Set `APP_URL` in production so these use your real domain.
 - Apply the new migration with `npx prisma migrate deploy`.
 
+## 🔑 Server details & delivery
+
+After a customer's payment is approved the subscription is **PENDING** until an admin provisions it:
+
+1. **Admin → Subscriptions → Awaiting server → Provision**: enter hostname, IP, region, OS, SSH port and the login (username + password **or** a private key file). Credentials are stored AES-encrypted; the same screen later updates or rotates them (leave the password/key blank to keep the stored one) and the **Server details** button re-opens it.
+2. Saving activates the service and (checkbox, on by default) **emails the customer** the IP, username, password and SSH command; a key file is attached as a `.pem`. `POST /api/admin/subscriptions/:id/resend-details` re-sends it.
+3. The customer sees the IP/hostname on **Services**, plus a *Server access* panel: the username is visible and the password / key is revealed (or the key downloaded) only on request, over a no-store, rate-limited endpoint that only the owner can call.
+
+The same credentials power CloudOps and App Deployments. Emails carry the password in plain text by design; customers are told to change it after first login. Use TLS-enabled SMTP.
+
 ## 🚀 App Deployments (VPS)
 
 Customers with an active VPS open **Services → Deploy app** (`/services/:id/deploy`) to deploy a Next.js / Node.js repo to their server over SSH (credentials are looked up server-side and never reach the browser):

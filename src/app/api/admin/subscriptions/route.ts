@@ -23,6 +23,7 @@ export async function GET(req: NextRequest) {
           user: { select: { id: true, name: true, email: true } },
           product: { select: { id: true, name: true, category: true } },
           plan: { select: { id: true, name: true, price: true } },
+          serviceConfig: { select: { hostname: true, ipAddress: true, credentials: true } },
           provisioningJob: { select: { status: true, attempts: true, lastError: true, updatedAt: true } },
         },
         skip,
@@ -32,7 +33,12 @@ export async function GET(req: NextRequest) {
       prisma.subscription.count({ where }),
     ]);
 
-    return apiSuccess({ subscriptions, meta: buildPaginationMeta(total, page, limit) });
+    // Never forward the encrypted blob: only say whether credentials exist.
+    const safe = subscriptions.map(({ serviceConfig, ...rest }) => ({
+      ...rest,
+      serviceConfig: serviceConfig ? { hostname: serviceConfig.hostname, ipAddress: serviceConfig.ipAddress, hasCredentials: Boolean(serviceConfig.credentials) } : null,
+    }));
+    return apiSuccess({ subscriptions: safe, meta: buildPaginationMeta(total, page, limit) });
   } catch (e) {
     if ((e as Error).message === 'UNAUTHORIZED') return apiError('Unauthorized', 401);
     if ((e as Error).message === 'FORBIDDEN') return apiError('Forbidden', 403);

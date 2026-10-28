@@ -114,12 +114,12 @@ export function adminManualPaymentSubmittedEmail(m: ManualPaymentInfo): Email {
 export function manualPaymentApprovedEmail(m: ManualPaymentInfo): Email {
   return {
     subject: `Payment received: ${m.productName}`,
-    text: `Hi ${m.userName},\n\nWe received your payment of ${m.amount} (ref ${m.reference}). ${m.productName} (${m.planName}) is now active for ${m.days} days.\n\n— DataVoult`,
+    text: `Hi ${m.userName},\n\nWe received your payment of ${m.amount} (ref ${m.reference}). ${m.productName} (${m.planName}) is confirmed for ${m.days} days. Once your service is set up we will email you its access details; you can also find them in your dashboard under Services.\n\n— DataVoult`,
     html: layout(
       'Payment received',
       p(`Hi ${escapeHtml(m.userName)},`) +
         p(`We received your payment of <b>${escapeHtml(m.amount)}</b> (ref ${escapeHtml(m.reference)}).`) +
-        p(`<b>${escapeHtml(m.productName)}</b> (${escapeHtml(m.planName)}) is now active for ${m.days} days.`),
+        p(`<b>${escapeHtml(m.productName)}</b> (${escapeHtml(m.planName)}) is confirmed for ${m.days} days. Once your service is set up we will email you its access details; you can also find them in your dashboard under Services.`),
     ),
   };
 }
@@ -151,6 +151,66 @@ export function invoiceIssuedEmail(i: { userName: string; number: string; total:
         (i.link
           ? p(`<a href="${escapeHtml(i.link)}">View or print your invoice</a>`)
           : p('You can view and print it from Billing in your account.')),
+    ),
+  };
+}
+
+export interface ServerDetailsInfo {
+  userName: string;
+  productName: string;
+  planName: string;
+  hostname: string;
+  ipAddress?: string | null;
+  domain?: string | null;
+  region?: string | null;
+  os?: string | null;
+  port: number;
+  username: string;
+  password?: string;
+  hasKey: boolean;
+  keyFilename?: string;
+  sshCommand?: string;
+  dashboardUrl?: string | null;
+}
+
+/** Access details for a provisioned service. Contains a secret by design — never log the result. */
+export function serverDetailsEmail(i: ServerDetailsInfo): Email {
+  const rows: Array<[string, string]> = [['Hostname', i.hostname]];
+  if (i.ipAddress) rows.push(['IP address', i.ipAddress]);
+  if (i.domain) rows.push(['Domain', i.domain]);
+  if (i.region) rows.push(['Region', i.region]);
+  if (i.os) rows.push(['Operating system', i.os]);
+  if (i.ipAddress) rows.push(['SSH port', String(i.port)]);
+  rows.push(['Username', i.username]);
+  if (i.password) rows.push(['Password', i.password]);
+  if (i.hasKey) rows.push(['Private key', `attached as ${i.keyFilename || 'a file'}`]);
+
+  const notes = [
+    i.hasKey ? 'Save the attached key file, restrict its permissions (chmod 600) and use it to log in.' : '',
+    'For your security, change the password after your first login and delete this email once saved.',
+    i.dashboardUrl ? `You can also see these details in your dashboard: ${i.dashboardUrl}` : 'You can also see these details in your dashboard under Services.',
+  ].filter(Boolean);
+
+  const text =
+    `Hi ${i.userName},\n\nYour ${i.productName} (${i.planName}) is ready.\n\n` +
+    rows.map(([k, v]) => `${k}: ${v}`).join('\n') +
+    (i.sshCommand ? `\n\nConnect with:\n${i.sshCommand}` : '') +
+    `\n\n${notes.join('\n')}\n\n— DataVoult`;
+
+  const table =
+    '<table style="border-collapse:collapse;margin:0 0 12px">' +
+    rows.map(([k, v]) => `<tr><td style="padding:4px 14px 4px 0;color:#71717a">${escapeHtml(k)}</td><td style="padding:4px 0"><code style="font-family:Menlo,Consolas,monospace">${escapeHtml(v)}</code></td></tr>`).join('') +
+    '</table>';
+  return {
+    subject: `Your server is ready: ${i.productName}`,
+    text,
+    html: layout(
+      'Your server is ready',
+      p(`Hi ${escapeHtml(i.userName)},`) +
+        p(`Your <b>${escapeHtml(i.productName)}</b> (${escapeHtml(i.planName)}) is ready. Here are your access details:`) +
+        table +
+        (i.sshCommand ? p(`Connect with:<br><code style="font-family:Menlo,Consolas,monospace">${escapeHtml(i.sshCommand)}</code>`) : '') +
+        notes.map((n) => p(escapeHtml(n))).join(''),
     ),
   };
 }
