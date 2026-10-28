@@ -8,6 +8,7 @@ import { parseRepoUrl, allowedGitHosts } from '@/lib/deploy-validation';
 import { createDeploymentSchema, makeAppName, normalizeDomain, resolveHttpsMode } from '@/lib/app-deploy-validation';
 import { buildAppDeployScript } from '@/lib/app-deploy-script';
 import { loadServerAccess, accessErrorResponse } from '@/lib/deploy-access';
+import { planDeployOptions } from '@/lib/docker-limits';
 import { runDeployment } from '@/lib/deployment-runner';
 import { publicDeployment } from '@/lib/deployment-serializer';
 
@@ -48,7 +49,14 @@ export async function POST(req: NextRequest) {
     const repo = parseRepoUrl(input.repoUrl);
     if (!repo) return apiError(`Repository must be an https URL on one of: ${allowedGitHosts().join(', ')}`, 400);
 
-    const access = await loadServerAccess(input.subscriptionId, userId);
+    const access = await loadServerAccess(input.subscriptionId, userId, ['VPS', 'DOCKER']);
+    // Docker hosting runs containers only, from the repo's own Dockerfile, within the plan's limits.
+    const opts = planDeployOptions(access.category, access.planLimits);
+    const mode = access.category === 'DOCKER' ? 'DOCKER' : input.mode;
+    if (opts.maxContainers) {
+      const used = await prisma.deployment.count({ where: { subscriptionId: input.subscriptionId } });
+      if (used >= opts.maxContainers) return apiError(`Your plan allows ${opts.maxContainers} container${opts.maxContainers > 1 ? 's' : ''} and all are in use. Remove one or upgrade your plan.`, 409);
+    }
     const domain = input.domain ? normalizeDomain(input.domain) ?? undefined : undefined;
     const httpsMode = resolveHttpsMode(input.httpsMode, domain);
     const appName = makeAppName(repo.repoName, input.port);
@@ -58,14 +66,15 @@ export async function POST(req: NextRequest) {
 
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
     const { script } = buildAppDeployScript({
-      repo, appName, branch: input.branch, port: input.port, mode: input.mode, httpsMode, domain,
+      repo, appName, branch: input.branch, port: input.port, mode, httpsMode, domain,
       email: user?.email, env: input.env, gitToken: input.gitToken, stamp: Date.now(),
+      requireDockerfile: opts.requireDockerfile, limits: opts.limits,
     });
 
     const deployment = await prisma.deployment.create({
       data: {
         subscriptionId: input.subscriptionId, userId, appName, repoUrl: repo.cloneUrl, branch: input.branch,
-        port: input.port, mode: input.mode, httpsMode, domain: domain ?? null,
+        port: input.port, mode, httpsMode, domain: domain ?? null,
         envEnc: input.env.length ? encryptJson(input.env) : null,
         status: 'DEPLOYING', log: '',
       },

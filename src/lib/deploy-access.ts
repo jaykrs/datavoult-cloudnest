@@ -11,9 +11,13 @@ export class AccessError extends Error {
   }
 }
 
+export type ServiceCategory = 'VPS' | 'DOCKER' | 'EMAIL';
+
 export interface ServerAccess {
   target: SshTarget;
   serviceConfigId: string;
+  category: ServiceCategory;
+  planLimits: Record<string, unknown>;
 }
 
 /**
@@ -23,14 +27,18 @@ export interface ServerAccess {
  * subscription id, after checking that the subscription belongs to the
  * caller, is active, and is a VPS.
  */
-export async function loadServerAccess(subscriptionId: string, userId: string): Promise<ServerAccess> {
+export async function loadServerAccess(subscriptionId: string, userId: string, categories: ServiceCategory[] = ['VPS']): Promise<ServerAccess> {
   const sub = await prisma.subscription.findFirst({
     where: { id: subscriptionId, userId },
-    include: { product: { select: { category: true } }, serviceConfig: true },
+    include: { product: { select: { category: true } }, plan: { select: { limits: true } }, serviceConfig: true },
   });
 
   if (!sub) throw new AccessError(404, 'Service not found');
-  if (sub.product.category !== 'VPS') throw new AccessError(400, 'CloudOps is only available for VPS services');
+  if (!categories.includes(sub.product.category as ServiceCategory)) {
+    throw new AccessError(400, categories.length === 1 && categories[0] === 'VPS'
+      ? 'CloudOps is only available for VPS services'
+      : 'App deployment is only available for VPS and Docker hosting services');
+  }
   if (sub.status !== 'ACTIVE') throw new AccessError(409, `This service is ${sub.status.toLowerCase()}`);
 
   const cfg = sub.serviceConfig;
@@ -49,6 +57,8 @@ export async function loadServerAccess(subscriptionId: string, userId: string): 
 
   return {
     serviceConfigId: cfg.id,
+    category: sub.product.category as ServiceCategory,
+    planLimits: (sub.plan.limits ?? {}) as Record<string, unknown>,
     target: {
       host: cfg.ipAddress,
       port: sshPortOf(cfg.config),

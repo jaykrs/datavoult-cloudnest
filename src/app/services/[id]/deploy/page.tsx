@@ -10,6 +10,7 @@ interface Dep {
   envKeys: string[]; url: string | null; selfSigned: boolean; log?: string; lastDeployedAt: string | null;
 }
 interface EnvRow { key: string; value: string }
+interface GhRepo { fullName: string; cloneUrl: string; private: boolean; defaultBranch: string; description: string | null; pushedAt: string | null }
 
 const badge = (s: Dep['status']) => (s === 'RUNNING' ? 'badge-active' : s === 'FAILED' ? 'badge-inactive' : 'badge-pending');
 const httpsLabel = { NONE: 'HTTP only', SELF_SIGNED: 'Self-signed HTTPS', LETSENCRYPT: "Let's Encrypt HTTPS" } as const;
@@ -32,6 +33,12 @@ export default function DeployPage({ params }: { params: { id: string } }) {
   const [token, setToken] = useState('');
   const [env, setEnv] = useState<EnvRow[]>([]);
   const logRef = useRef<HTMLPreElement>(null);
+  const [repos, setRepos] = useState<GhRepo[] | null>(null);
+  const [repoFilter, setRepoFilter] = useState('');
+  const [repoError, setRepoError] = useState('');
+  const [loadingRepos, setLoadingRepos] = useState(false);
+  const [scanned, setScanned] = useState(0);
+  const isDocker = sub?.product?.category === 'DOCKER';
 
   useEffect(() => {
     const s = localStorage.getItem('dv_user');
@@ -62,6 +69,19 @@ export default function DeployPage({ params }: { params: { id: string } }) {
     if (r.ok) setOpenDep(d.data.deployment);
   }
 
+  async function loadRepos() {
+    setRepoError(''); setLoadingRepos(true);
+    try {
+      const res = await fetch('/api/github/repos', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token: token.trim() }), cache: 'no-store' });
+      const d = await res.json();
+      if (!res.ok) { setRepoError(d.error || 'Could not load your repositories'); setRepos(null); return; }
+      setRepos(d.data.repos); setScanned(d.data.scanned);
+    } catch { setRepoError('Network error — please try again'); }
+    finally { setLoadingRepos(false); }
+  }
+
+  function pickRepo(r: GhRepo) { setRepoUrl(r.cloneUrl); setBranch(r.defaultBranch); }
+
   async function submit() {
     setError('');
     const p = Number(port);
@@ -71,7 +91,7 @@ export default function DeployPage({ params }: { params: { id: string } }) {
       const res = await fetch('/api/deployments', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          subscriptionId: params.id, repoUrl: repoUrl.trim(), branch: branch.trim() || 'main', port: p, mode,
+          subscriptionId: params.id, repoUrl: repoUrl.trim(), branch: branch.trim() || 'main', port: p, mode: isDocker ? 'DOCKER' : mode,
           domain: domain.trim(), httpsMode: https === 'AUTO' ? undefined : https, gitToken: token.trim(),
           env: env.filter(e => e.key.trim()).map(e => ({ key: e.key.trim(), value: e.value })),
         }),
@@ -112,7 +132,7 @@ export default function DeployPage({ params }: { params: { id: string } }) {
             <Link href="/services" className="btn btn-ghost btn-sm" style={{ marginBottom: 12 }}><ArrowLeft size={14} /> Back to Services</Link>
             <h1 className="page-header-title">App Deployments</h1>
             <p className="page-header-sub">
-              Deploy a Next.js / Node.js repo to <strong>{sub ? `${sub.product?.name} (${sub.serviceConfig?.ipAddress || 'no IP yet'})` : '…'}</strong> —
+              {isDocker ? 'Build a repo that has a Dockerfile and run it as a container on' : 'Deploy a Next.js / Node.js repo to'} <strong>{sub ? `${sub.product?.name} (${sub.serviceConfig?.ipAddress || 'no IP yet'})` : '…'}</strong> —
               {' '}built and served by nginx on ports 80/443.{' '}
               <Link href={`/services/${params.id}/cloudops`} style={{ color: 'var(--accent-bright)' }}>CloudOps</Link>
             </p>
@@ -120,6 +140,14 @@ export default function DeployPage({ params }: { params: { id: string } }) {
         </div>
 
         <div className="page-content" style={{ maxWidth: 1100, margin: '0 auto', width: '100%', display: 'flex', flexDirection: 'column', gap: 24 }}>
+          {isDocker && sub?.plan && (
+            <div className="card" style={{ padding: 16, fontSize: 13, display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+              <span><b>Plan:</b> {sub.plan.name}</span>
+              {sub.plan.limits?.containers !== undefined && <span><b>Containers:</b> {deps.length} / {String(sub.plan.limits.containers)}</span>}
+              {sub.plan.limits?.ram && <span><b>Memory per container:</b> up to {String(sub.plan.limits.ram)}</span>}
+              <span style={{ color: 'var(--text-muted)' }}>Containers run on your Docker hosting only.</span>
+            </div>
+          )}
           {sub && !ready && <div className="card" style={{ padding: 16, fontSize: 14 }}>{sub.status !== 'ACTIVE' ? `This service is ${String(sub.status).toLowerCase()}.` : 'Your server is still being set up.'}</div>}
 
           <div style={card}>
@@ -131,6 +159,9 @@ export default function DeployPage({ params }: { params: { id: string } }) {
               </div>
               <div><label className="label">Branch</label><input className="input" value={branch} onChange={e => setBranch(e.target.value)} /></div>
               <div><label className="label">App port (nginx proxies 80/443 → this)</label><input className="input" type="number" min={1024} max={65535} value={port} onChange={e => setPort(e.target.value)} /></div>
+              {isDocker ? (
+                <div><label className="label">Run with</label><div className="input" style={{ display: 'flex', alignItems: 'center', gap: 6, opacity: 0.85 }}><Box size={14} /> Docker — your repo&apos;s Dockerfile</div></div>
+              ) : (
               <div>
                 <label className="label">Run with</label>
                 <select className="input" value={mode} onChange={e => setMode(e.target.value as 'PM2' | 'DOCKER')} style={{ cursor: 'pointer' }}>
@@ -138,6 +169,7 @@ export default function DeployPage({ params }: { params: { id: string } }) {
                   <option value="DOCKER">Docker (uses your Dockerfile, or a generated one)</option>
                 </select>
               </div>
+              )}
               <div><label className="label">Domain (optional)</label><input className="input" value={domain} onChange={e => setDomain(e.target.value)} placeholder="app.example.com" /></div>
               <div>
                 <label className="label">HTTPS</label>
@@ -148,8 +180,37 @@ export default function DeployPage({ params }: { params: { id: string } }) {
                   <option value="NONE">HTTP only</option>
                 </select>
               </div>
-              <div><label className="label">Access token (private repos only)</label><input className="input" type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} placeholder="Used for the clone only — never stored" /></div>
+              <div>
+                <label className="label">{isDocker ? 'GitHub access token' : 'Access token (private repos only)'}</label>
+                <div style={{ display: 'flex', gap: 8 }}>
+                  <input className="input" type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} placeholder="Used for this session only — never stored" />
+                  {isDocker && <button type="button" className="btn btn-secondary" disabled={loadingRepos || token.trim().length < 8} onClick={loadRepos} style={{ whiteSpace: 'nowrap' }}>{loadingRepos ? <span className="spinner" style={{ width: 14, height: 14 }} /> : 'Load my repos'}</button>}
+                </div>
+                {isDocker && <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>Create a fine-grained token on GitHub with read-only <i>Contents</i> and <i>Metadata</i> access. We list your repositories that contain a Dockerfile.</div>}
+                {repoError && <div style={{ color: 'var(--red)', fontSize: 12, marginTop: 4 }}>{repoError}</div>}
+              </div>
             </div>
+
+            {isDocker && repos && (
+              <div style={{ marginTop: 20 }}>
+                <label className="label">Your repositories with a Dockerfile ({repos.length} of {scanned} scanned)</label>
+                {repos.length === 0 ? <p style={{ fontSize: 13, color: 'var(--text-muted)' }}>None of your {scanned} most recently updated repositories has a Dockerfile at its root. You can still paste a repository URL above.</p> : (
+                  <>
+                    <input className="input" placeholder="Filter…" value={repoFilter} onChange={e => setRepoFilter(e.target.value)} style={{ marginBottom: 8, fontSize: 13 }} />
+                    <div style={{ maxHeight: 240, overflowY: 'auto', border: '1px solid var(--border)', borderRadius: 8 }}>
+                      {repos.filter(r => r.fullName.toLowerCase().includes(repoFilter.toLowerCase())).map(r => (
+                        <button key={r.fullName} type="button" onClick={() => pickRepo(r)} style={{ display: 'block', width: '100%', textAlign: 'left', padding: '10px 12px', background: repoUrl === r.cloneUrl ? 'var(--accent-glow)' : 'transparent', border: 0, borderBottom: '1px solid var(--border)', color: 'inherit', cursor: 'pointer' }}>
+                          <strong style={{ fontSize: 13 }}>{r.fullName}</strong>{' '}
+                          <span className="badge badge-pending" style={{ fontSize: 10 }}>{r.private ? 'private' : 'public'}</span>
+                          <span style={{ fontSize: 11, color: 'var(--text-muted)', marginLeft: 8 }}>{r.defaultBranch}</span>
+                          {r.description && <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{r.description}</div>}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
 
             <div style={{ marginTop: 20 }}>
               <label className="label">Environment variables</label>
@@ -171,7 +232,7 @@ export default function DeployPage({ params }: { params: { id: string } }) {
           </div>
 
           <div style={card}>
-            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>Your apps</h2>
+            <h2 style={{ fontSize: 18, fontWeight: 600, marginBottom: 12 }}>{isDocker ? 'Your containers' : 'Your apps'}</h2>
             {deps.length === 0 && <p style={{ color: 'var(--text-muted)', fontSize: 14 }}>Nothing deployed yet.</p>}
             <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
               {deps.map(d => (

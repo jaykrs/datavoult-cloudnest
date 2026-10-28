@@ -8,6 +8,7 @@ import { parseRepoUrl } from '@/lib/deploy-validation';
 import { redeploySchema } from '@/lib/app-deploy-validation';
 import { buildAppDeployScript } from '@/lib/app-deploy-script';
 import { loadServerAccess, accessErrorResponse } from '@/lib/deploy-access';
+import { planDeployOptions } from '@/lib/docker-limits';
 import { runDeployment } from '@/lib/deployment-runner';
 import { isDeployInProgress } from '@/lib/deployment-utils';
 import { publicDeployment } from '@/lib/deployment-serializer';
@@ -39,12 +40,14 @@ export async function POST(req: NextRequest, { params }: { params: { id: string 
     let env: { key: string; value: string }[] = [];
     try { env = parsed.data.env ?? (d.envEnc ? decryptJson(d.envEnc) : []); } catch { return apiError('Stored environment variables could not be read — please re-enter them', 409); }
 
-    const access = await loadServerAccess(d.subscriptionId, userId);
+    const access = await loadServerAccess(d.subscriptionId, userId, ['VPS', 'DOCKER']);
+    const opts = planDeployOptions(access.category, access.planLimits);
     const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true } });
     const branch = parsed.data.branch ?? d.branch;
     const { script } = buildAppDeployScript({
       repo, appName: d.appName, branch, port: d.port, mode: d.mode, httpsMode: d.httpsMode,
       domain: d.domain ?? undefined, email: user?.email, env, gitToken: parsed.data.gitToken, stamp: Date.now(),
+      requireDockerfile: opts.requireDockerfile, limits: opts.limits,
     });
 
     const updated = await prisma.deployment.update({

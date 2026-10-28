@@ -14,6 +14,10 @@ export interface AppDeployInput {
   email?: string;
   env: { key: string; value: string }[];
   gitToken?: string;
+  /** Docker hosting plans: the repo must bring its own Dockerfile (nothing is generated). */
+  requireDockerfile?: boolean;
+  /** Docker hosting plans: per-container caps from the plan. */
+  limits?: { memoryMb?: number | null; cpus?: number | null };
   /** Unique per deploy, e.g. Date.now(). */
   stamp: number | string;
 }
@@ -159,13 +163,21 @@ export function buildAppDeployScript(input: AppDeployInput): { script: string; r
   L.push(`${writeFile('.env', envFileContent(input.env, port))}`);
   L.push('chmod 600 .env');
 
+  if (mode === 'DOCKER' && input.requireDockerfile) {
+    L.push('[ -f Dockerfile ] || { echo "No Dockerfile found at the root of the repository. Add one and redeploy." >&2; exit 17; }');
+  }
+
   if (mode === 'DOCKER') {
     L.push('step "Building Docker image"');
-    L.push(`if [ ! -f Dockerfile ]; then echo "No Dockerfile in the repository — using a generated Node.js one"; ${writeFile('Dockerfile', dockerfileContent(port))}; [ -f .dockerignore ] || printf 'node_modules\\n.git\\n.next\\n' > .dockerignore; fi`);
+    if (!input.requireDockerfile) L.push(`if [ ! -f Dockerfile ]; then echo "No Dockerfile in the repository — using a generated Node.js one"; ${writeFile('Dockerfile', dockerfileContent(port))}; [ -f .dockerignore ] || printf 'node_modules\\n.git\\n.next\\n' > .dockerignore; fi`);
     L.push(`$DOCKER build --label dv.app=${q(appName)} -t ${q(`${appName}:${stamp}`)} .`);
     L.push('step "Starting container"');
     L.push(`$DOCKER rm -f ${q(appName)} >/dev/null 2>&1 || true`);
-    L.push(`$DOCKER run -d --name ${q(appName)} --restart unless-stopped --env-file .env -p 127.0.0.1:${port}:${port} ${q(`${appName}:${stamp}`)}`);
+    const caps: string[] = [];
+    if (input.limits?.memoryMb && Number.isInteger(input.limits.memoryMb)) caps.push(`--memory ${input.limits.memoryMb}m --memory-swap ${input.limits.memoryMb}m`);
+    if (input.limits?.cpus && Number.isFinite(input.limits.cpus)) caps.push(`--cpus ${Number(input.limits.cpus)}`);
+    if (input.requireDockerfile) caps.push('--pids-limit 1024 --security-opt no-new-privileges');
+    L.push(`$DOCKER run -d --name ${q(appName)} --restart unless-stopped ${caps.length ? caps.join(' ') + ' ' : ''}--env-file .env -p 127.0.0.1:${port}:${port} ${q(`${appName}:${stamp}`)}`);
     L.push(`$DOCKER image prune -f --filter ${q(`label=dv.app=${appName}`)} >/dev/null 2>&1 || true`);
   } else {
     L.push('step "Installing dependencies and building"');
