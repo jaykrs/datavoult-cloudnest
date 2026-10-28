@@ -47,6 +47,7 @@ export interface MailMessage {
   text: string;
   html: string;
   replyTo?: string;
+  attachments?: Array<{ filename: string; content: string; contentType?: string }>;
 }
 
 /** Send one email. Resolves true on success; never throws. */
@@ -64,6 +65,7 @@ export async function sendMail(msg: MailMessage): Promise<boolean> {
       text: msg.text,
       html: msg.html,
       replyTo: msg.replyTo ? stripNewlines(msg.replyTo) : undefined,
+      attachments: msg.attachments,
     });
     return true;
   } catch (e) {

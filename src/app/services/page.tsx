@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import DashboardSidebar from '@/components/dashboard/Sidebar';
 import Pagination from '@/components/ui/Pagination';
+import ServerAccess from '@/components/dashboard/ServerAccess';
 import { Server, Package, Mail, Wifi, Copy, RefreshCw, XCircle, Plus, Globe, Terminal } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
@@ -163,6 +164,7 @@ export default function ServicesPage() {
                         )}
                       </div>
                     )}
+                    {(sub.status === 'ACTIVE' || sub.status === 'PENDING') && <ServerAccess subscriptionId={sub.id} status={sub.status} />}
                     <div className="service-card-limits">
                       {Object.entries(sub.plan.limits).map(([k, v]) => (
                         <div key={k} className="limit-chip">

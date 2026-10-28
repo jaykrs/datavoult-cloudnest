@@ -2,6 +2,8 @@ import { prisma } from './prisma';
 import { sendMail, adminRecipients, mailConfigured } from './mailer';
 import * as tpl from './email-templates';
 import { formatINR } from './currency';
+import { decryptJson } from './crypto';
+import { sshCommand, sshPortOf, type StoredCredentials } from './server-details';
 
 /** Longest we let email delay an HTTP response. The send keeps going afterwards. */
 const MAX_WAIT_MS = 4000;
@@ -128,5 +130,60 @@ export async function notifyInvoiceIssued(invoiceId: string): Promise<void> {
     ]);
   } catch (e) {
     console.error('[notify] invoice', (e as Error).message);
+  }
+}
+
+/**
+ * Email the customer their server access details (IP, username, password and/or key file).
+ * Reads the stored (encrypted) credentials, so callers never pass secrets around.
+ * Returns true only when the mail was actually sent. Never throws, never logs secrets.
+ */
+export async function notifyServerDetails(subscriptionId: string): Promise<boolean> {
+  try {
+    const sub = await prisma.subscription.findUnique({
+      where: { id: subscriptionId },
+      include: { user: true, product: true, plan: true, serviceConfig: true },
+    });
+    const cfg = sub?.serviceConfig;
+    if (!sub || !cfg) return false;
+
+    let creds: StoredCredentials | null = null;
+    const stored = cfg.credentials as { enc?: string } | null;
+    if (stored?.enc) creds = decryptJson<StoredCredentials>(stored.enc);
+    if (!creds) return false; // nothing to send beyond what the dashboard shows
+
+    const config = (cfg.config ?? {}) as { os?: string };
+    const port = sshPortOf(cfg.config);
+    const host = cfg.ipAddress || cfg.domain || cfg.hostname || '';
+    const keyFilename = `${(cfg.hostname || 'server').replace(/[^A-Za-z0-9._-]/g, '_')}.pem`;
+    const base = (process.env.APP_URL || '').replace(/\/$/, '');
+
+    const mail = tpl.serverDetailsEmail({
+      userName: sub.user.name,
+      productName: sub.product.name,
+      planName: sub.plan.name,
+      hostname: cfg.hostname || host,
+      ipAddress: cfg.ipAddress,
+      domain: cfg.domain,
+      region: cfg.region,
+      os: config.os,
+      port,
+      username: creds.username,
+      password: creds.password,
+      hasKey: Boolean(creds.privateKey),
+      keyFilename,
+      sshCommand: sub.product.category === 'VPS' && host
+        ? sshCommand({ username: creds.username, host, port, keyFile: creds.privateKey ? keyFilename : undefined })
+        : undefined,
+      dashboardUrl: base ? `${base}/services` : null,
+    });
+    return await sendMail({
+      to: sub.user.email,
+      ...mail,
+      attachments: creds.privateKey ? [{ filename: keyFilename, content: creds.privateKey, contentType: 'application/x-pem-file' }] : undefined,
+    });
+  } catch (e) {
+    console.error('[notify] server details', (e as Error).message);
+    return false;
   }
 }
