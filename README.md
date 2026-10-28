@@ -287,6 +287,10 @@ Deployments are saved with live logs, can be redeployed (new code, branch or env
 
 Requirements on the server: Debian/Ubuntu with root or passwordless sudo (nginx, certbot and Docker are installed with apt when missing); for the PM2 mode Node.js 18+ must already be installed (CloudOps → Install). Only one app without a domain can use the server's IP on 80/443; give others a domain. API: `POST/GET /api/deployments`, `GET/DELETE /api/deployments/:id`, `POST /api/deployments/:id/redeploy`. Run `npx prisma migrate deploy` for the new `deployments` table.
 
+### Docker hosting products
+
+A customer with an active **Docker** product gets **Services → Deploy container** (same page, Docker-only): they paste a GitHub access token (read-only *Contents* + *Metadata*; used for the session only, never stored), click *Load my repos*, and pick from their repositories that have a `Dockerfile` at the root (or paste any repo URL). The repo is built and run as a container **on that subscription's own Docker host** (the server details the admin provisioned) — never on a VPS — using the repo's own Dockerfile (nothing is generated; a missing Dockerfile fails the deploy with a clear message). The plan's limits apply: number of containers (`containers`), memory per container (`ram`), and containers run with a PID cap and `no-new-privileges`. nginx/HTTPS, env vars, redeploy and remove work as for VPS apps.
+
 ## 💳 Pricing & Payments
 
 - **Per-day pricing in ₹**: a plan's price is the cost of **one day**. Customers choose a number of days (**minimum 30**, maximum 1095) at checkout and pay `price × days`. The total is always computed on the server in integer paise (`src/lib/pricing.ts`); the browser never sends an amount. The subscription runs for exactly the purchased days, and renewals add days from the later of "now" and the current end date.

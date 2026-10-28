@@ -121,9 +121,9 @@ export default function ServicesPage() {
                               CloudOps
                             </Link>
                           )}
-                          {sub.product.category === 'VPS' && (
+                          {(sub.product.category === 'VPS' || sub.product.category === 'DOCKER') && (
                             <Link href={`/services/${sub.id}/deploy`} className="btn btn-secondary">
-                              Deploy app
+                              {sub.product.category === 'DOCKER' ? 'Deploy container' : 'Deploy app'}
                             </Link>
                           )}
                           <button onClick={() => handleCancel(sub.id)} disabled={cancelling === sub.id} className="btn btn-sm btn-danger">

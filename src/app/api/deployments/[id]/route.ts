@@ -46,7 +46,7 @@ export async function DELETE(req: NextRequest, { params }: Params) {
     if (!force) {
       const limit = rateLimit(`deployments-remove:${userId}`, 10, 10 * 60_000);
       if (!limit.allowed) return apiError('Too many requests. Please wait a moment.', 429);
-      const access = await loadServerAccess(d.subscriptionId, userId);
+      const access = await loadServerAccess(d.subscriptionId, userId, ['VPS', 'DOCKER']);
       const script = buildTeardownScript({ appName: d.appName, mode: d.mode, domain: d.httpsMode === 'LETSENCRYPT' ? d.domain : null });
       const result = await runSsh(access.target, script, { timeoutMs: 3 * 60_000 });
       await pinHostKeyIfUnset(access.serviceConfigId, result.hostKeySha256).catch(() => {});
