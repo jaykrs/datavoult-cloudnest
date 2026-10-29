@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import DashboardSidebar from '@/components/dashboard/Sidebar';
-import { Server, CreditCard, Activity, ArrowRight, Package, Mail, Plus, Wifi } from 'lucide-react';
+import { CheckCircle, X, Server, CreditCard, Activity, ArrowRight, Package, Mail, Plus, Wifi } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
 interface Subscription {
@@ -35,6 +35,14 @@ export default function DashboardPage() {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [loading, setLoading] = useState(true);
 
+  const [thanks, setThanks] = useState(false);
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('payment') === 'submitted') {
+      setThanks(true);
+      window.history.replaceState(null, '', '/dashboard');
+    }
+  }, []);
+
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
     if (stored) try { setUser(JSON.parse(stored)); } catch {}
@@ -64,6 +72,18 @@ export default function DashboardPage() {
         </div>
 
         <div className="page-content">
+          {thanks && (
+            <div role="status" style={{ display: 'flex', gap: 12, alignItems: 'flex-start', background: 'var(--bg-card)', border: '1px solid var(--green)', borderRadius: 'var(--radius-lg)', padding: '14px 18px', marginBottom: 20 }}>
+              <CheckCircle size={20} style={{ color: 'var(--green)', flexShrink: 0, marginTop: 1 }} />
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 600 }}>Thanks for your order and payment!</div>
+                <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
+                  We&apos;ve received your payment details and our team is verifying them. Your service will appear below once it&apos;s confirmed and provisioned — we&apos;ll email you.
+                </div>
+              </div>
+              <button type="button" aria-label="Dismiss" onClick={() => setThanks(false)} className="btn btn-sm btn-secondary"><X size={14} /></button>
+            </div>
+          )}
           {loading ? (
             <div className="stats-grid">
               {[0,1,2].map(i => <div key={i} className="card" style={{ height: 120, opacity: 0.4 }} />)}

@@ -27,6 +27,16 @@ const IFSC_PATTERN = /^[A-Z]{4}0[A-Z0-9]{6}$/;
 
 const env = (k: string) => (process.env[k] || '').trim();
 
+/** Which BANK_* settings are missing or invalid (names only, never values) — for server logs / admin diagnostics. */
+export function bankConfigProblems(): string[] {
+  const out: string[] = [];
+  for (const k of ['BANK_ACCOUNT_NAME', 'BANK_ACCOUNT_NUMBER', 'BANK_NAME']) if (!env(k)) out.push(`${k} is not set`);
+  const ifsc = env('BANK_IFSC').toUpperCase();
+  if (!ifsc) out.push('BANK_IFSC is not set');
+  else if (!IFSC_PATTERN.test(ifsc)) out.push('BANK_IFSC is not a valid IFSC (4 letters, 0, 6 letters/digits)');
+  return out;
+}
+
 export function getBankDetails(): BankDetails | null {
   const accountName = env('BANK_ACCOUNT_NAME');
   const accountNumber = env('BANK_ACCOUNT_NUMBER');
