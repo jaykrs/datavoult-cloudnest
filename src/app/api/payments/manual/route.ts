@@ -6,7 +6,7 @@ import { rateLimit } from '@/lib/rate-limit';
 import { prepareOrder, OrderError } from '@/lib/orders';
 import {
   manualMethodAvailable, generateReference, REQUEST_TTL_HOURS, MAX_OPEN_REQUESTS, OPEN_STATUSES,
-  getUpiDetails, getBankDetails,
+  getUpiDetails, getBankDetails, bankConfigProblems,
 } from '@/lib/manual-payments';
 import { serializeRequestForUser } from '@/lib/payment-request-serializer';
 import { z } from 'zod';
@@ -23,6 +23,7 @@ export async function GET() {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+    if (getBankDetails() === null) console.warn('[payments/manual] Bank transfer hidden:', bankConfigProblems().join('; '));
     return apiSuccess({
       methods: { UPI: getUpiDetails() !== null, BANK_TRANSFER: getBankDetails() !== null },
       requests: rows.map((r) => serializeRequestForUser(r)),

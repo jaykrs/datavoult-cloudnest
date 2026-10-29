@@ -89,7 +89,8 @@ export default function ManualPaymentPage() {
         body: JSON.stringify({ transactionRef: txRef, payerDetails: payer || undefined }),
       });
       const d = await res.json();
-      if (!res.ok) setError(d.error || 'Could not submit'); else setReq(d.data.request);
+      if (!res.ok) setError(d.error || 'Could not submit');
+      else { router.push('/dashboard?payment=submitted'); return; }
     } catch { setError('Network error. Please try again.'); }
     setSaving(false);
   }

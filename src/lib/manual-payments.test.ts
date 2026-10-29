@@ -1,6 +1,6 @@
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import {
-  getBankDetails, getUpiDetails, manualMethodAvailable, upiPayUri, generateReference, receivedMatches, buildInstructions,
+  getBankDetails, bankConfigProblems, getUpiDetails, manualMethodAvailable, upiPayUri, generateReference, receivedMatches, buildInstructions,
 } from './manual-payments';
 import { submitManualPaymentSchema, approveManualPaymentSchema, createManualPaymentSchema } from './api';
 import { parseOrderNotes } from './razorpay';
@@ -111,5 +111,19 @@ describe('admin email', () => {
     });
     expect(m.html).not.toContain('<script>');
     expect(m.html).not.toContain('<b>x</b>');
+  });
+});
+
+describe('bankConfigProblems', () => {
+  it('names the missing or invalid settings, never their values', () => {
+    vi.stubEnv('BANK_ACCOUNT_NAME', ''); vi.stubEnv('BANK_ACCOUNT_NUMBER', '1234'); vi.stubEnv('BANK_NAME', 'X'); vi.stubEnv('BANK_IFSC', 'BAD');
+    const p = bankConfigProblems();
+    expect(p).toContain('BANK_ACCOUNT_NAME is not set');
+    expect(p.join(' ')).toMatch(/BANK_IFSC is not a valid IFSC/);
+    expect(p.join(' ')).not.toContain('1234');
+  });
+  it('is empty when fully configured', () => {
+    bankEnv();
+    expect(bankConfigProblems()).toEqual([]);
   });
 });
