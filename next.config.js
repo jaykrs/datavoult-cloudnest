@@ -1,5 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // ssh2 ships optional native add-ons; keep it out of the webpack bundle (it is loaded at runtime on the server).
+  experimental: { serverComponentsExternalPackages: ['ssh2'] },
   images: {
     domains: ['images.unsplash.com', 'avatars.githubusercontent.com'],
   },

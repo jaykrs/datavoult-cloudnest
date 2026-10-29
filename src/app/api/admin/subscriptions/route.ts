@@ -6,6 +6,8 @@ import type { SubscriptionStatus } from '@prisma/client';
 
 const STATUSES: SubscriptionStatus[] = ['PENDING', 'ACTIVE', 'SUSPENDED', 'CANCELLED', 'EXPIRED', 'TRIAL'];
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     await requireAdmin();

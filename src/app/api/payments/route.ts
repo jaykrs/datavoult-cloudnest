@@ -5,6 +5,8 @@ import { stripStock } from '@/lib/inventory';
 import { requireAuth } from '@/lib/auth';
 import { publicPaymentFields } from '@/lib/serializers';
 
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const session = await requireAuth();

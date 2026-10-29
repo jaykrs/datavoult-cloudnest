@@ -13,6 +13,8 @@ import { loadServerAccess, pinHostKeyIfUnset, accessErrorResponse } from '@/lib/
  * Tails a PM2 log on the caller's own VPS. No credentials in the URL: the
  * server looks them up from the subscription.
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const session = await requireAuth();
