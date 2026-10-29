@@ -9,6 +9,7 @@ import {
   getUpiDetails, getBankDetails, bankConfigProblems,
 } from '@/lib/manual-payments';
 import { serializeRequestForUser } from '@/lib/payment-request-serializer';
+import { notifyManualPaymentSubmitted } from '@/lib/notifications';
 import { z } from 'zod';
 
 const include = { product: true, plan: true } as const;
@@ -25,6 +26,7 @@ export async function GET() {
     });
     if (getBankDetails() === null) console.warn('[payments/manual] Bank transfer hidden:', bankConfigProblems().join('; '));
     return apiSuccess({
+      bank: getBankDetails(),
       methods: { UPI: getUpiDetails() !== null, BANK_TRANSFER: getBankDetails() !== null },
       requests: rows.map((r) => serializeRequestForUser(r)),
     });
@@ -93,6 +95,8 @@ export async function POST(req: NextRequest) {
           },
           include,
         });
+        // Bank transfers go straight to the admin's verification queue (the customer may add the UTR later).
+        if (body.method === 'BANK_TRANSFER') void notifyManualPaymentSubmitted(created.id);
         return apiSuccess({ request: serializeRequestForUser(created) }, 201);
       } catch (e) {
         if ((e as { code?: string }).code !== 'P2002') throw e;
