@@ -154,7 +154,7 @@ function CheckoutForm() {
     const data = await res.json();
     if (!res.ok) { setError(data.error || 'Could not create the payment request.'); setProcessing(false); return; }
     // Bank transfer: details were already shown here, so go to the dashboard; the admin verifies the credit and provisions.
-    if (m === 'BANK_TRANSFER') { router.push(`/dashboard?payment=submitted&request=${encodeURIComponent(data.data.request.id)}`); return; }
+    if (m === 'BANK_TRANSFER') { window.location.assign(`/dashboard?payment=submitted&request=${encodeURIComponent(data.data.request.id)}`); return; }
     router.push(`/checkout/manual/${data.data.request.id}`);
   }
 

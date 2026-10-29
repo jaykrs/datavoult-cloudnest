@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import DashboardSidebar from '@/components/dashboard/Sidebar';
 import Pagination from '@/components/ui/Pagination';
 import Link from 'next/link';
+import { paymentMethodLabel } from '@/lib/payment-labels';
 import { CreditCard, Download, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
@@ -86,7 +87,7 @@ export default function BillingPage() {
               <div style={{ fontWeight: 600, marginBottom: 10 }}>Bank / UPI payments in progress</div>
               {manual.map(m => (
                 <div key={m.id} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, padding: '8px 0', fontSize: 13 }}>
-                  <span>{m.product?.name} · {m.days} days · ₹{Number(m.amount).toFixed(2)} · <span style={{ fontFamily: 'var(--font-mono)' }}>{m.reference}</span></span>
+                  <span>{m.product?.name} · {paymentMethodLabel(m.method)} · {m.days} days · ₹{Number(m.amount).toFixed(2)} · <span style={{ fontFamily: 'var(--font-mono)' }}>{m.reference}</span></span>
                   <Link href={`/checkout/manual/${m.id}`} className="btn btn-secondary btn-sm">{m.status === 'SUBMITTED' ? 'View status' : 'Complete payment'}</Link>
                 </div>
               ))}
@@ -135,7 +136,7 @@ export default function BillingPage() {
               <>
                 <table className="data-table">
                   <thead>
-                    <tr><th>Invoice</th><th>Service</th><th>Amount</th><th>Status</th><th>Date</th><th></th></tr>
+                    <tr><th>Invoice</th><th>Service</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th></th></tr>
                   </thead>
                   <tbody>
                     {payments.map((p) => (
@@ -152,6 +153,7 @@ export default function BillingPage() {
                           ) : '—'}
                         </td>
                         <td style={{ fontSize: 14, fontWeight: 600 }}>₹{Number(p.amount).toFixed(2)}</td>
+                        <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{paymentMethodLabel(p.method)}</td>
                         <td>
                           <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                             {statusIcon[p.status]}

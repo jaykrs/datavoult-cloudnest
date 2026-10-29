@@ -1,4 +1,5 @@
 'use client';
+import { paymentMethodLabel } from '@/lib/payment-labels';
 import { useEffect, useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import Pagination from '@/components/ui/Pagination';
@@ -129,7 +130,7 @@ export default function AdminPaymentsPage() {
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.currency}</div>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{p.method}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{paymentMethodLabel(p.method)}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {statusIcon[p.status]}
