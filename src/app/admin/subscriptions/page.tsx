@@ -23,6 +23,10 @@ export default function AdminSubscriptionsPage() {
   const [subscriptions,setSubscriptions]= useState<AdminSub[]>([]);
   const [loading,      setLoading]      = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('status');
+    if (s && ['PENDING', 'ACTIVE', 'CANCELLED', 'SUSPENDED', 'EXPIRED', 'TRIAL'].includes(s)) setStatusFilter(s);
+  }, []);
   const [page,         setPage]         = useState(1);
   const [total,        setTotal]        = useState(0);
   const [editing,      setEditing]      = useState<AdminSub | null>(null);

@@ -302,18 +302,21 @@ function CheckoutForm() {
                       { id: 'RAZORPAY', icon: <CreditCard size={18} />, title: 'Card, UPI, netbanking, wallets', sub: 'Pay online through Razorpay — service starts instantly.', on: true },
                       { id: 'UPI', icon: <Smartphone size={18} />, title: 'UPI transfer (manual)', sub: 'Pay to our UPI ID. Activated once we confirm the payment.', on: manualAvailable.UPI },
                       { id: 'BANK_TRANSFER', icon: <Landmark size={18} />, title: 'Bank transfer (NEFT / IMPS / RTGS)', sub: 'Transfer to our current account. Activated once we confirm the payment.', on: manualAvailable.BANK_TRANSFER },
-                    ] as const).filter(m => m.on).map(m => (
+                    ] as const).map(m => (
                       <label key={m.id} className={`method-btn${method === m.id ? ' active' : ''}`}
-                        style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)' }}>
-                        <input type="radio" name="method" checked={method === m.id} onChange={() => setMethod(m.id)} style={{ marginTop: 3 }} />
+                        style={{ display: 'flex', gap: 12, alignItems: 'flex-start', padding: '12px 14px', border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', opacity: m.on ? 1 : 0.5, cursor: m.on ? 'pointer' : 'not-allowed' }}>
+                        <input type="radio" name="method" checked={method === m.id} disabled={!m.on} onChange={() => setMethod(m.id)} style={{ marginTop: 3 }} />
                         <span style={{ color: 'var(--accent-bright)', marginTop: 1 }}>{m.icon}</span>
                         <span>
                           <span style={{ display: 'block', fontWeight: 600, fontSize: 14 }}>{m.title}</span>
-                          <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{m.sub}</span>
+                          <span style={{ display: 'block', fontSize: 12, color: 'var(--text-muted)', marginTop: 2 }}>{m.on ? m.sub : 'Currently unavailable — please use another method or contact support.'}</span>
                         </span>
                       </label>
                     ))}
                   </div>
+                  <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6, marginTop: 12 }}>
+                    Online payments start your service instantly. Offline (UPI / bank) payments are verified by our team, who then provision your service.
+                  </p>
                   {method === 'RAZORPAY' && (
                     <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6, marginTop: 12 }}>
                       Card details are entered in Razorpay&apos;s secure window and never touch our servers.

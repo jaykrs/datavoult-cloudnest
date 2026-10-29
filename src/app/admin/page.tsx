@@ -7,6 +7,8 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 interface User { name: string; email: string; role: string; }
 interface Stats {
   totalUsers: number; totalRevenue: number; activeSubscriptions: number; totalProducts: number;
+  awaitingProvisioningCount: number;
+  awaitingProvisioning: { id: string; customer: string; email: string; product: string; plan: string; amount: number; paidVia: string; paidAt: string }[];
   recentPayments: { id: string; amount: number; status: string; createdAt: string; user: { name: string; email: string }; subscription?: { product: { name: string }; plan: { name: string } } }[];
   subscriptionsByCategory: { category: string; count: number }[];
   revenueByMonth: { month: string; revenue: number }[];
@@ -126,6 +128,30 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
+
+              {/* Paid orders waiting for the admin to hand over a server */}
+              {stats && stats.awaitingProvisioningCount > 0 && (
+                <div className="table-wrap" style={{ marginBottom: 24, borderColor: 'var(--amber)' }}>
+                  <div style={{ padding: '20px 28px', borderBottom: '1px solid var(--border)', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <h2 style={{ fontFamily: 'var(--font-display)', fontSize: 20 }}>Paid — awaiting provisioning ({stats.awaitingProvisioningCount})</h2>
+                    <a href="/admin/subscriptions?status=PENDING" className="btn btn-primary btn-sm">Provision servers</a>
+                  </div>
+                  <table className="data-table">
+                    <thead><tr><th>Customer</th><th>Service</th><th>Amount</th><th>Paid via</th><th>Paid</th></tr></thead>
+                    <tbody>
+                      {stats.awaitingProvisioning.map(a => (
+                        <tr key={a.id}>
+                          <td><div style={{ fontWeight: 600 }}>{a.customer}</div><div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{a.email}</div></td>
+                          <td>{a.product} · {a.plan}</td>
+                          <td>₹{a.amount.toFixed(2)}</td>
+                          <td>{a.paidVia}</td>
+                          <td>{new Date(a.paidAt).toLocaleString('en-IN')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
 
               {/* Recent payments */}
               <div className="table-wrap">
