@@ -49,7 +49,7 @@ function SuccessContent() {
           <h1 style={{ fontFamily: 'var(--font-display)', fontSize: 36, marginBottom: 8 }}>Payment successful!</h1>
           <p style={{ color: 'var(--text-secondary)', fontSize: 16 }}>
             {subscription && subscription.status !== 'ACTIVE'
-              ? 'We have received your payment and are setting up your service. Welcome to DataVoult!'
+              ? 'Thanks for your order and payment! Our team is confirming it and will provision your server shortly — we will email you the access details.'
               : 'Your service has been activated. Welcome to DataVoult!'}
           </p>
         </div>

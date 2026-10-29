@@ -3,7 +3,7 @@ import { paymentMethodLabel } from '@/lib/payment-labels';
 import { useEffect, useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import Pagination from '@/components/ui/Pagination';
-import { TrendingUp, DollarSign, CheckCircle, XCircle, Clock } from 'lucide-react';
+import { TrendingUp, IndianRupee, CheckCircle, XCircle, Clock } from 'lucide-react';
 
 interface User { name: string; email: string; role: string; }
 interface AdminPayment {
@@ -75,7 +75,7 @@ export default function AdminPaymentsPage() {
         <div className="page-content">
           <div className="stats-grid">
             {[
-              { icon: <DollarSign size={18} />, label: 'Total Revenue',  value: `₹${summary.revenue.toFixed(2)}`, color: 'var(--green)'  },
+              { icon: <IndianRupee size={18} />, label: 'Total Revenue',  value: `₹${summary.revenue.toFixed(2)}`, color: 'var(--green)'  },
               { icon: <TrendingUp size={18} />, label: 'Transactions',   value: summary.count,                   color: 'var(--accent)' },
               { icon: <CheckCircle size={18}/>, label: 'Successful',     value: summary.success,                 color: 'var(--green)'  },
               { icon: <XCircle size={18} />,   label: 'Failed',          value: summary.failed,                  color: 'var(--red)'    },
@@ -126,7 +126,7 @@ export default function AdminPaymentsPage() {
                     </td>
                     <td>
                       <div style={{ fontSize: 15, fontWeight: 700, color: p.status === 'COMPLETED' ? 'var(--green)' : 'var(--text-primary)' }}>
-                        ${Number(p.amount).toFixed(2)}
+                        ₹{Number(p.amount).toFixed(2)}
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.currency}</div>
                     </td>

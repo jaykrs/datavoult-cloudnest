@@ -72,7 +72,16 @@ describe('fulfillPayment — new subscription', () => {
     expect(payArgs).toMatchObject({
       userId: 'user_1', subscriptionId: 'sub_new', status: 'COMPLETED', method: 'UPI', gatewayId: 'pay_1', currency: 'INR',
     });
-    expect(runProvisioning).toHaveBeenCalledWith('sub_new');
+    // Default: the order waits for an admin to confirm and provision it.
+    expect(runProvisioning).not.toHaveBeenCalled();
+  });
+
+  it('provisions immediately only when AUTO_PROVISION=true', async () => {
+    vi.stubEnv('AUTO_PROVISION', 'true');
+    try {
+      await fulfillPayment(input);
+      expect(runProvisioning).toHaveBeenCalledWith('sub_new');
+    } finally { vi.unstubAllEnvs(); }
   });
 
   it('is idempotent: an already-recorded payment grants nothing new', async () => {
@@ -117,8 +126,11 @@ describe('fulfillPayment — new subscription', () => {
   });
 
   it('still reports success if provisioning throws (the job stays for retry)', async () => {
+    vi.stubEnv('AUTO_PROVISION', 'true');
     runProvisioning.mockRejectedValue(new Error('provider down'));
-    await expect(fulfillPayment(input)).resolves.toMatchObject({ outcome: 'created', subscriptionId: 'sub_new' });
+    try {
+      await expect(fulfillPayment(input)).resolves.toMatchObject({ outcome: 'created', subscriptionId: 'sub_new' });
+    } finally { vi.unstubAllEnvs(); }
   });
 });
 

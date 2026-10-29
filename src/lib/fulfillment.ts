@@ -164,11 +164,15 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
       return created;
     });
 
-    // Best effort: a failure here leaves a FAILED job the cron/admin picks up.
-    try {
-      await runProvisioning(subscription.id);
-    } catch (e) {
-      console.error('[fulfillment] provisioning threw', subscription.id, e);
+    // Online payments follow the same flow as UPI / bank transfer: the order waits for an admin to
+    // confirm it and provision the server. Set AUTO_PROVISION=true only with a real automated provider.
+    if (process.env.AUTO_PROVISION === 'true') {
+      // Best effort: a failure here leaves a FAILED job the cron/admin picks up.
+      try {
+        await runProvisioning(subscription.id);
+      } catch (e) {
+        console.error('[fulfillment] provisioning threw', subscription.id, e);
+      }
     }
     await issueInvoiceForGatewayId(paymentId);
     await notifyOrderSubscribed(subscription.id);
