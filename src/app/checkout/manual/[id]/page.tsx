@@ -2,6 +2,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
+import QRCode from 'qrcode';
 import { Copy, Check, Clock, CheckCircle, XCircle, Smartphone, Landmark, ArrowLeft } from 'lucide-react';
 
 interface Instructions {
@@ -30,6 +31,24 @@ function CopyRow({ label, value, strong }: { label: string; value: string; stron
       <button type="button" className="icon-btn" title="Copy" onClick={async () => {
         try { await navigator.clipboard.writeText(value); setDone(true); setTimeout(() => setDone(false), 1500); } catch {}
       }}>{done ? <Check size={15} color="var(--green)" /> : <Copy size={15} />}</button>
+    </div>
+  );
+}
+
+/** Renders the `upi://pay` link (payee, amount and reference pre-filled) as a scannable QR code. */
+function UpiQr({ uri }: { uri: string }) {
+  const [src, setSrc] = useState<string | null>(null);
+  useEffect(() => {
+    let alive = true;
+    QRCode.toDataURL(uri, { width: 220, margin: 2, errorCorrectionLevel: 'M' }).then(d => { if (alive) setSrc(d); }).catch(() => {});
+    return () => { alive = false; };
+  }, [uri]);
+  if (!src) return null;
+  return (
+    <div style={{ textAlign: 'center', margin: '4px 0 14px' }}>
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img src={src} alt="UPI payment QR code" width={220} height={220} style={{ background: '#fff', borderRadius: 12, padding: 4 }} />
+      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 6 }}>Scan with any UPI app — amount and reference are pre-filled</div>
     </div>
   );
 }
@@ -152,6 +171,7 @@ export default function ManualPaymentPage() {
             <CopyRow label="Amount (₹)" value={ins.amount.toFixed(2)} strong />
             <CopyRow label="Reference / remark" value={ins.reference} strong />
             {ins.upi && (<>
+              <UpiQr uri={ins.upi.uri} />
               <CopyRow label="UPI ID" value={ins.upi.upiId} />
               <CopyRow label="Payee name" value={ins.upi.payeeName} />
               <a href={ins.upi.uri} className="btn btn-primary" style={{ marginTop: 14, width: '100%', justifyContent: 'center' }}>Open my UPI app</a>
