@@ -33,11 +33,6 @@ function LoginForm() {
     } catch { setError('Network error. Please try again.'); setLoading(false); }
   }
 
-  function fill(role: 'user' | 'admin') {
-    if (role === 'user')  { setEmail('john.doe@example.com');    setPassword('Password123!'); }
-    else                  { setEmail('admin@datavoult.io'); setPassword('Password123!'); }
-  }
-
   return (
     <div className="auth-page grid-bg">
       <div className="glow-orb" style={{ position: 'fixed', top: '30%', left: '50%', transform: 'translate(-50%,-50%)', width: 600, height: 600, background: 'radial-gradient(circle, rgba(59,130,246,0.06) 0%, transparent 70%)' }} />
@@ -76,18 +71,6 @@ function LoginForm() {
               {loading ? <span className="spinner" style={{ width: 16, height: 16 }} /> : <>Sign in <ArrowRight size={16} /></>}
             </button>
           </form>
-
-          {/* Seeded demo credentials are for local development only. */}
-          {process.env.NODE_ENV !== 'production' && (
-          <div className="auth-demo-box">
-            <div className="auth-demo-title">Quick demo login</div>
-            <div className="auth-demo-fills">
-              <button type="button" onClick={() => fill('user')}  className="btn btn-secondary btn-sm btn-full" style={{ fontSize: 11 }}>👤 Fill User</button>
-              <button type="button" onClick={() => fill('admin')} className="btn btn-secondary btn-sm btn-full" style={{ fontSize: 11 }}>🛡️ Fill Admin</button>
-            </div>
-            <div className="auth-demo-hint">Password for all accounts: <span style={{ color: 'var(--accent-bright)' }}>Password123!</span></div>
-          </div>
-          )}
         </div>
 
         <p className="auth-foot">
