@@ -338,6 +338,7 @@ Set `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET` and `RAZORPAY_WEBHOOK_SECRET`. In t
 ### Provisioning
 A paid order creates a `PENDING` subscription plus a provisioning job, and becomes `ACTIVE` only once the service exists.
 
+- `AUTO_PROVISION` (default off): online (Razorpay) payments follow the same flow as UPI / bank transfer — the order shows under "Paid — awaiting provisioning" until an admin provisions it. Set `AUTO_PROVISION=true` only with an automated provider.
 - `PROVISIONING_PROVIDER=manual` (default): an admin creates the server out of band, then records it with `POST /api/admin/subscriptions/[id]/provision` (hostname, IP, region, SSH credentials, optional host-key fingerprint).
 - `PROVISIONING_PROVIDER=mock`: development only; creates no infrastructure (uses reserved `203.0.113.0/24` addresses). Refused in production.
 - To automate a real cloud, implement `ProvisioningProvider` in `src/lib/provisioning/types.ts`, register it in `providers.ts`/`index.ts`, and the queue and retries come for free.

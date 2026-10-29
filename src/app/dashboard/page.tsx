@@ -152,7 +152,7 @@ export default function DashboardPage() {
                     {payments.map(p => (
                       <tr key={p.id}>
                         <td style={{ fontSize: 13, color: 'var(--text-secondary)' }}>{p.subscription?.product.name || 'N/A'}</td>
-                        <td style={{ fontWeight: 600 }}>${Number(p.amount).toFixed(2)}</td>
+                        <td style={{ fontWeight: 600 }}>₹{Number(p.amount).toFixed(2)}</td>
                         <td><span className={`badge badge-${p.status === 'COMPLETED' ? 'active' : 'pending'}`}>{p.status}</span></td>
                         <td style={{ fontSize: 12, color: 'var(--text-muted)' }}>{new Date(p.createdAt).toLocaleDateString()}</td>
                       </tr>
