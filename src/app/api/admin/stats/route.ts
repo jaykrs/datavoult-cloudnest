@@ -13,6 +13,8 @@ export async function GET() {
       totalProducts,
       recentPayments,
       subsByCategory,
+      awaitingRows,
+      awaitingCount,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.payment.aggregate({ where: { status: 'COMPLETED' }, _sum: { amount: true } }),
@@ -28,6 +30,17 @@ export async function GET() {
         _count: { id: true },
         where: { status: 'ACTIVE' },
       }),
+      // Paid, but no server handed over yet — the admin's to-do list.
+      prisma.subscription.findMany({
+        where: { status: 'PENDING', payments: { some: { status: 'COMPLETED' } } },
+        orderBy: { createdAt: 'asc' },
+        take: 20,
+        include: {
+          user: { select: { name: true, email: true } }, product: { select: { name: true } }, plan: { select: { name: true } },
+          payments: { where: { status: 'COMPLETED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { amount: true, method: true, gatewayData: true, createdAt: true } },
+        },
+      }),
+      prisma.subscription.count({ where: { status: 'PENDING', payments: { some: { status: 'COMPLETED' } } } }),
     ]);
 
     // Revenue by month (last 6 months)
@@ -66,6 +79,12 @@ export async function GET() {
       totalRevenue: Number(totalRevenue._sum.amount || 0),
       activeSubscriptions,
       totalProducts,
+      awaitingProvisioningCount: awaitingCount,
+      awaitingProvisioning: awaitingRows.map((s) => ({
+        id: s.id, customer: s.user.name, email: s.user.email, product: s.product.name, plan: s.plan.name,
+        amount: Number(s.payments[0]?.amount ?? 0), paidVia: (s.payments[0]?.gatewayData as { gateway?: string } | null)?.gateway === 'manual' ? 'Offline' : 'Online',
+        paidAt: (s.payments[0]?.createdAt ?? s.createdAt).toISOString(),
+      })),
       recentPayments,
       subscriptionsByCategory,
       revenueByMonth: Object.entries(revenueByMonth).map(([month, revenue]) => ({ month, revenue })),

@@ -28,6 +28,12 @@ export async function notifyUserSignedUp(user: { name: string; email: string }):
   }
 }
 
+/** Human label for how a payment was made (online gateway vs offline transfer). */
+export function describePaymentMethod(gateway?: string | null, method?: string | null): string {
+  if (gateway === 'manual') return method === 'UPI' ? 'UPI transfer (offline, admin-approved)' : method === 'BANK_TRANSFER' ? 'Bank transfer (offline, admin-approved)' : 'Offline payment (admin-approved)';
+  return `Online (Razorpay${method ? `, ${String(method).toLowerCase().replace('_', ' ')}` : ''})`;
+}
+
 /** Confirmation to the customer + heads-up to admins for a NEW subscription. Never throws. */
 export async function notifyOrderSubscribed(subscriptionId: string): Promise<void> {
   try {
@@ -45,9 +51,15 @@ export async function notifyOrderSubscribed(subscriptionId: string): Promise<voi
       amount: formatINR((sub.payments[0]?.amount ?? sub.plan.price).toNumber()),
       subscriptionId: sub.id,
     };
+    const base = (process.env.APP_URL || '').replace(/\/$/, '');
+    const adminInfo: tpl.OrderInfo = {
+      ...info,
+      paymentMethod: describePaymentMethod((sub.payments[0]?.gatewayData as { gateway?: string } | null)?.gateway, sub.payments[0]?.method),
+      provisionUrl: base ? `${base}/admin/subscriptions?status=PENDING` : undefined,
+    };
     const jobs = [sendMail({ to: info.userEmail, ...tpl.orderConfirmationEmail(info) })];
     const admins = adminRecipients();
-    if (admins.length) jobs.push(sendMail({ to: admins, ...tpl.adminNewOrderEmail(info) }));
+    if (admins.length) jobs.push(sendMail({ to: admins, ...tpl.adminNewOrderEmail(adminInfo) }));
     await deliver(jobs);
   } catch (e) {
     console.error('[notify] order', (e as Error).message);

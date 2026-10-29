@@ -43,6 +43,10 @@ export interface OrderInfo {
   planName: string;
   amount: string;
   subscriptionId: string;
+  /** Online / offline payment label, e.g. "Razorpay (card)" or "UPI transfer". */
+  paymentMethod?: string;
+  /** Admin link to the subscription to provision it. */
+  provisionUrl?: string;
 }
 
 export function orderConfirmationEmail(o: OrderInfo): Email {
@@ -60,13 +64,14 @@ export function orderConfirmationEmail(o: OrderInfo): Email {
 
 export function adminNewOrderEmail(o: OrderInfo): Email {
   return {
-    subject: `New subscription: ${o.productName}`,
-    text: `New subscription\nCustomer: ${o.userName} <${o.userEmail}>\nProduct: ${o.productName} (${o.planName})\nAmount: ${o.amount}\nReference: ${o.subscriptionId}`,
+    subject: `Payment received — provision ${o.productName}`,
+    text: `Payment received — action needed: provision the server\nCustomer: ${o.userName} <${o.userEmail}>\nProduct: ${o.productName} (${o.planName})\nAmount: ${o.amount}${o.paymentMethod ? `\nPaid via: ${o.paymentMethod}` : ''}\nReference: ${o.subscriptionId}${o.provisionUrl ? `\nProvision: ${o.provisionUrl}` : ''}`,
     html: layout(
-      'New subscription',
+      'Payment received — provision the service',
       p(`<b>Customer:</b> ${escapeHtml(o.userName)} &lt;${escapeHtml(o.userEmail)}&gt;`) +
         p(`<b>Product:</b> ${escapeHtml(o.productName)} (${escapeHtml(o.planName)})`) +
-        p(`<b>Amount:</b> ${escapeHtml(o.amount)}<br><b>Reference:</b> ${escapeHtml(o.subscriptionId)}`),
+        p(`<b>Amount:</b> ${escapeHtml(o.amount)}${o.paymentMethod ? `<br><b>Paid via:</b> ${escapeHtml(o.paymentMethod)}` : ''}<br><b>Reference:</b> ${escapeHtml(o.subscriptionId)}`) +
+        (o.provisionUrl ? p(`<a href="${escapeHtml(o.provisionUrl)}">Open in admin to provision the server</a>`) : ''),
     ),
   };
 }
