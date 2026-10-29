@@ -7,6 +7,8 @@ const STATUSES = ['AWAITING_PAYMENT', 'SUBMITTED', 'APPROVED', 'REJECTED', 'CANC
 type Status = (typeof STATUSES)[number];
 
 /** GET /api/admin/payment-requests — offline payments to verify (newest first). */
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     await requireAdmin();

@@ -15,6 +15,8 @@ const STATUSES: SubscriptionStatus[] = ['PENDING', 'ACTIVE', 'SUSPENDED', 'CANCE
  * fulfilling a verified gateway payment (see src/lib/fulfillment.ts); a
  * route that created them directly would hand out service for free.
  */
+export const dynamic = 'force-dynamic';
+
 export async function GET(req: NextRequest) {
   try {
     const session = await requireAuth();
