@@ -105,10 +105,10 @@ export interface ManualPaymentInfo {
 export function adminManualPaymentSubmittedEmail(m: ManualPaymentInfo): Email {
   return {
     subject: `Payment to verify: ${m.reference} (${m.amount})`,
-    text: `A customer says they paid by ${m.method}.\nReference: ${m.reference}\nAmount: ${m.amount}\nUTR/ref: ${m.transactionRef ?? '-'}\nCustomer: ${m.userName} <${m.userEmail}>\nOrder: ${m.productName} (${m.planName}) for ${m.days} days\n\nCheck your bank statement, then approve or reject in Admin > Payment requests.`,
+    text: `${m.transactionRef ? `A customer says they paid by ${m.method}.` : `A customer chose ${m.method} and may not have sent the UTR yet — match the credit by reference and amount.`}\nReference: ${m.reference}\nAmount: ${m.amount}\nUTR/ref: ${m.transactionRef ?? '-'}\nCustomer: ${m.userName} <${m.userEmail}>\nOrder: ${m.productName} (${m.planName}) for ${m.days} days\n\nCheck your bank statement, then approve or reject in Admin > Payment requests.`,
     html: layout(
       'Payment to verify',
-      p(`<b>${escapeHtml(m.userName)}</b> &lt;${escapeHtml(m.userEmail)}&gt; says they paid by ${escapeHtml(m.method)}.`) +
+      p(`<b>${escapeHtml(m.userName)}</b> &lt;${escapeHtml(m.userEmail)}&gt; ${m.transactionRef ? 'says they paid by' : 'chose'} ${escapeHtml(m.method)}${m.transactionRef ? '' : ' (UTR not sent yet — match the credit by reference and amount)'}.`) +
         p(`<b>Reference:</b> ${escapeHtml(m.reference)}<br><b>Amount:</b> ${escapeHtml(m.amount)}<br><b>UTR / bank ref:</b> ${escapeHtml(m.transactionRef ?? '-')}`) +
         p(`<b>Order:</b> ${escapeHtml(m.productName)} (${escapeHtml(m.planName)}) for ${m.days} days`) +
         p('Check your bank statement, then approve or reject it in Admin &rarr; Payment requests.'),

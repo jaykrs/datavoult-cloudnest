@@ -59,6 +59,7 @@ function CheckoutForm() {
   // Days of service to buy: per-day price × days, minimum 30.
   const [days, setDays] = useState<number>(MIN_ORDER_DAYS);
   const [daysText, setDaysText] = useState(String(MIN_ORDER_DAYS));
+  const [bank, setBank] = useState<{ accountName: string; accountNumber: string; ifsc: string; bankName: string; branch: string | null; accountType: string } | null>(null);
   const [method, setMethod] = useState<PayMethod>('RAZORPAY');
   const [manualAvailable, setManualAvailable] = useState<{ UPI: boolean; BANK_TRANSFER: boolean }>({ UPI: false, BANK_TRANSFER: false });
 
@@ -81,7 +82,7 @@ function CheckoutForm() {
       const pr = d.data?.profile;
       if (pr) setBill({ billingName: pr.billingName || '', billingGstin: pr.billingGstin || '', billingAddress: pr.billingAddress || '', billingStateCode: pr.billingStateCode || '' });
     }).catch(() => {});
-    fetch('/api/payments/manual').then(r => r.json()).then(d => { if (d.data?.methods) setManualAvailable(d.data.methods); }).catch(() => {});
+    fetch('/api/payments/manual').then(r => r.json()).then(d => { if (d.data?.methods) setManualAvailable(d.data.methods); if (d.data?.bank) setBank(d.data.bank); }).catch(() => {});
     fetch(`/api/products/${productId}`)
       .then(r => r.json())
       .then(d => {
@@ -152,6 +153,8 @@ function CheckoutForm() {
     });
     const data = await res.json();
     if (!res.ok) { setError(data.error || 'Could not create the payment request.'); setProcessing(false); return; }
+    // Bank transfer: details were already shown here, so go to the dashboard; the admin verifies the credit and provisions.
+    if (m === 'BANK_TRANSFER') { router.push(`/dashboard?payment=submitted&request=${encodeURIComponent(data.data.request.id)}`); return; }
     router.push(`/checkout/manual/${data.data.request.id}`);
   }
 
@@ -317,6 +320,21 @@ function CheckoutForm() {
                   <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6, marginTop: 12 }}>
                     Online payments start your service instantly. Offline (UPI / bank) payments are verified by our team, who then provision your service.
                   </p>
+                  {method === 'BANK_TRANSFER' && bank && (
+                    <div style={{ marginTop: 14, border: '1px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px 14px', fontSize: 13 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 8 }}>Transfer to this account (NEFT / IMPS / RTGS)</div>
+                      {([['Account name', bank.accountName], ['Account number', bank.accountNumber], ['IFSC', bank.ifsc],
+                        ['Bank', `${bank.bankName}${bank.branch ? ` — ${bank.branch}` : ''}`], ['Account type', bank.accountType]] as const).map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 12, padding: '4px 0' }}>
+                          <span style={{ color: 'var(--text-muted)' }}>{k}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', textAlign: 'right', wordBreak: 'break-all' }}>{v}</span>
+                        </div>
+                      ))}
+                      <p style={{ color: 'var(--text-muted)', fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
+                        Click “Continue” to place the order — you&apos;ll get a payment reference to put in the transfer remark. Our team verifies the credit and then provisions your server.
+                      </p>
+                    </div>
+                  )}
                   {method === 'RAZORPAY' && (
                     <p style={{ color: 'var(--text-muted)', fontSize: 12, lineHeight: 1.6, marginTop: 12 }}>
                       Card details are entered in Razorpay&apos;s secure window and never touch our servers.

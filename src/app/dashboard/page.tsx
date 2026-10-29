@@ -36,9 +36,11 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const [thanks, setThanks] = useState(false);
+  const [pendingReq, setPendingReq] = useState<string | null>(null);
   useEffect(() => {
     if (new URLSearchParams(window.location.search).get('payment') === 'submitted') {
       setThanks(true);
+      setPendingReq(new URLSearchParams(window.location.search).get('request'));
       window.history.replaceState(null, '', '/dashboard');
     }
   }, []);
@@ -79,6 +81,7 @@ export default function DashboardPage() {
                 <div style={{ fontWeight: 600 }}>Thanks for your order and payment!</div>
                 <div style={{ fontSize: 13, color: 'var(--text-muted)', marginTop: 2 }}>
                   We&apos;ve received your payment details and our team is verifying them. Your service will appear below once it&apos;s confirmed and provisioned — we&apos;ll email you.
+                  {pendingReq && <> Paid by bank transfer? <Link href={`/checkout/manual/${pendingReq}`} style={{ color: 'var(--accent-bright)' }}>View your payment reference and add the UTR</Link> to speed up verification.</>}
                 </div>
               </div>
               <button type="button" aria-label="Dismiss" onClick={() => setThanks(false)} className="btn btn-sm btn-secondary"><X size={14} /></button>
