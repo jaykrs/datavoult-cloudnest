@@ -58,11 +58,8 @@ export async function prepareOrder(input: {
       throw new OrderError(409, 'This subscription cannot be renewed');
     }
   } else {
-    const existing = await prisma.subscription.findFirst({
-      where: { userId, productId, status: { in: ['ACTIVE', 'TRIAL', 'PENDING'] } },
-    });
-    if (existing) throw new OrderError(409, 'You already have a subscription to this product');
-    // Renewals bypass this: people already on the product keep their service.
+    // Customers may buy the same product/plan any number of times (each purchase is its own
+    // subscription / server); only stock limits how many can be sold.
     if (!isInStock(plan.product.inventoryCount)) throw new OrderError(409, 'This product is currently out of stock');
     if (!isInStock(plan.inventoryCount)) throw new OrderError(409, 'This plan is currently sold out');
   }
