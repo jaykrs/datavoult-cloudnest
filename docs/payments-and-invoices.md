@@ -10,7 +10,7 @@ updated: 2026-10-28
 ## Ways to pay
 
 ### Online payment (Razorpay)
-Pay by card, net banking, wallet or UPI through Razorpay. The payment is verified automatically and your order is recorded straight away. Card details are handled by Razorpay and are never stored by DataVoult.
+Pay by card, net banking, wallet or UPI through Razorpay. The payment is verified automatically and your order is recorded straight away; our team then confirms it and provisions your server. Card details are handled by Razorpay and are never stored by DataVoult.
 
 ### UPI or bank transfer
 1. At checkout choose **UPI** or **Bank transfer**. You see the payee details and a unique **payment reference**.
@@ -22,7 +22,7 @@ Payments that do not match the amount are rejected with a reason; contact us wit
 
 ## After payment
 
-- **Online payments** create your order immediately.
+- **Online payments** are verified automatically and your order is recorded straight away. Our team then confirms (approves) the payment before setting up your server.
 - **UPI / bank transfer** create your order when we approve the payment.
 - Your service is then set up by our team; you are emailed the access details when it is ready (see [Your service and access details](/docs/your-service)).
 
