@@ -7,6 +7,7 @@ import { runProvisioning, DEFAULT_REGION } from './provisioning';
 import type { OrderNotes } from './razorpay';
 import { notifyOrderSubscribed } from './notifications';
 import { issueInvoiceForGatewayId } from './invoices';
+import { PENDING_APPROVAL } from './gateway-approval';
 
 /** A problem retrying will not fix (bad data, amount mismatch). Callers should not retry. */
 export class FulfillmentError extends Error {
@@ -160,7 +161,12 @@ export async function fulfillPayment(input: FulfillInput): Promise<FulfillResult
           provisioningJob: { create: {} },
         },
       });
-      await tx.payment.create({ data: paymentData(created.id) });
+      const base = paymentData(created.id);
+      await tx.payment.create({
+        data: gateway === 'razorpay'
+          ? { ...base, gatewayData: { ...(base.gatewayData as object), approval: PENDING_APPROVAL } }
+          : base,
+      });
       return created;
     });
 

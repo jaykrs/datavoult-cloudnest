@@ -3,6 +3,7 @@ import { sendMail, adminRecipients, mailConfigured } from './mailer';
 import * as tpl from './email-templates';
 import { formatINR } from './currency';
 import { decryptJson } from './crypto';
+import { isAwaitingApproval } from './gateway-approval';
 import { sshCommand, sshPortOf, type StoredCredentials } from './server-details';
 
 /** Longest we let email delay an HTTP response. The send keeps going afterwards. */
@@ -55,7 +56,8 @@ export async function notifyOrderSubscribed(subscriptionId: string): Promise<voi
     const adminInfo: tpl.OrderInfo = {
       ...info,
       paymentMethod: describePaymentMethod((sub.payments[0]?.gatewayData as { gateway?: string } | null)?.gateway, sub.payments[0]?.method),
-      provisionUrl: base ? `${base}/admin/subscriptions?status=PENDING` : undefined,
+      needsApproval: isAwaitingApproval(sub.payments[0]?.gatewayData),
+      provisionUrl: base ? `${base}${isAwaitingApproval(sub.payments[0]?.gatewayData) ? '/admin/payments?approval=pending' : '/admin/subscriptions?status=PENDING'}` : undefined,
     };
     const jobs = [sendMail({ to: info.userEmail, ...tpl.orderConfirmationEmail(info) })];
     const admins = adminRecipients();
@@ -107,6 +109,29 @@ export async function notifyManualPaymentSubmitted(requestId: string): Promise<v
     await deliver([sendMail({ to: admins, ...tpl.adminManualPaymentSubmittedEmail(info) })]);
   } catch (e) {
     console.error('[notify] manual payment submitted', (e as Error).message);
+  }
+}
+
+/** Tell the customer an admin confirmed their online payment. Never throws. */
+export async function notifyGatewayPaymentApproved(paymentId: string): Promise<void> {
+  try {
+    const pay = await prisma.payment.findUnique({
+      where: { id: paymentId },
+      include: { user: true, subscription: { include: { product: true, plan: true } } },
+    });
+    if (!pay?.subscription) return;
+    const gd = (pay.gatewayData ?? {}) as { paymentId?: string; days?: number };
+    await deliver([sendMail({
+      to: pay.user.email,
+      ...tpl.manualPaymentApprovedEmail({
+        userName: pay.user.name, userEmail: pay.user.email,
+        productName: pay.subscription.product.name, planName: pay.subscription.plan.name,
+        days: gd.days ?? 0, amount: formatINR(pay.amount.toNumber()), reference: gd.paymentId ?? pay.id,
+        method: 'online payment',
+      }),
+    })]);
+  } catch (e) {
+    console.error('[notify] gateway payment approved', (e as Error).message);
   }
 }
 
