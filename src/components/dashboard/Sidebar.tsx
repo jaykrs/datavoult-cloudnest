@@ -1,7 +1,7 @@
 'use client';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
-import { Database, LayoutDashboard, Server, CreditCard, HelpCircle, Settings, LogOut, ChevronRight } from 'lucide-react';
+import { Database, LayoutDashboard, Server, CreditCard, HelpCircle, Settings, LogOut, ChevronRight, MessageSquare } from 'lucide-react';
 
 interface SidebarProps { user?: { name: string; email: string; role: string } | null; }
 
@@ -19,6 +19,7 @@ export default function DashboardSidebar({ user }: SidebarProps) {
     { href: '/dashboard', icon: <LayoutDashboard size={17} />, label: 'Overview' },
     { href: '/services',  icon: <Server size={17} />,         label: 'Services' },
     { href: '/billing',   icon: <CreditCard size={17} />,     label: 'Billing' },
+    { href: '/messages',  icon: <MessageSquare size={17} />,  label: 'Messages' },
     { href: '/support',   icon: <HelpCircle size={17} />,     label: 'Support' },
     { href: '/settings',  icon: <Settings size={17} />,       label: 'Settings' },
   ];

@@ -40,6 +40,7 @@ model User {
   sessions      Session[]
   passwordResetTokens PasswordResetToken[]
   supportTickets SupportTicket[]
+  conversations Conversation[]
 
   @@map("users")
 }
