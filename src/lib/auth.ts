@@ -62,9 +62,17 @@ export async function requireAuth(): Promise<JWTPayload> {
     throw new Error('UNAUTHORIZED');
   }
   const { prisma } = await import('./prisma');
-  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true, role: true } });
+  const user = await prisma.user.findUnique({ where: { id: session.userId }, select: { email: true, role: true, passwordChangedAt: true } });
   if (!user) throw new Error('UNAUTHORIZED');
+  if (isSessionStale(session.iat, user.passwordChangedAt)) throw new Error('UNAUTHORIZED');
   return { ...session, email: user.email, role: user.role };
+}
+
+/** A token issued (iat, in seconds) before the last password change must not keep working. */
+export function isSessionStale(iat: number | undefined, passwordChangedAt: Date | null | undefined): boolean {
+  if (!passwordChangedAt) return false;
+  if (typeof iat !== 'number') return true;
+  return iat < Math.floor(passwordChangedAt.getTime() / 1000);
 }
 
 export function isAdminRole(role: unknown): boolean {

@@ -4,6 +4,8 @@ import * as tpl from './email-templates';
 import { formatINR } from './currency';
 import { decryptJson } from './crypto';
 import { isAwaitingApproval } from './gateway-approval';
+import { RESET_TTL_MINUTES } from './password-reset';
+import { getSiteUrl } from './seo';
 import { sshCommand, sshPortOf, type StoredCredentials } from './server-details';
 
 /** Longest we let email delay an HTTP response. The send keeps going afterwards. */
@@ -222,5 +224,16 @@ export async function notifyServerDetails(subscriptionId: string): Promise<boole
   } catch (e) {
     console.error('[notify] server details', (e as Error).message);
     return false;
+  }
+}
+
+/** Email a password-reset link. Never throws; in development without mail configured the link is logged instead. */
+export async function notifyPasswordReset(user: { name: string; email: string }, token: string): Promise<void> {
+  try {
+    const url = `${getSiteUrl()}/reset-password?token=${token}`;
+    const sent = await sendMail({ to: user.email, ...tpl.passwordResetEmail(user.name, url, RESET_TTL_MINUTES) });
+    if (!sent && process.env.NODE_ENV !== 'production') console.info('[notify] mail not configured — dev reset link:', url);
+  } catch (e) {
+    console.error('[notify] password reset', (e as Error).message);
   }
 }

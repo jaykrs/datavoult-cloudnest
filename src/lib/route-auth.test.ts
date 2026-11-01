@@ -13,6 +13,7 @@ const WRITE = ['POST', 'PUT', 'PATCH', 'DELETE'];
 // Public by design — each has its own protection (credentials, captcha, signature or secret).
 const PUBLIC_WRITES = new Set([
   'auth/login/route.ts', 'auth/register/route.ts', 'auth/logout/route.ts',
+  'auth/forgot-password/route.ts', 'auth/reset-password/route.ts', // token-based, rate limited, never reveal whether an email exists
   'contact/route.ts',            // reCAPTCHA + rate limit
   'razorpay/webhook/route.ts',   // HMAC signature
   'internal/cron/route.ts',      // CRON_SECRET bearer

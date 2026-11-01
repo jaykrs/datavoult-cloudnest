@@ -57,7 +57,7 @@ function LoginForm() {
             <div>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
                 <label className="label" style={{ margin: 0 }}>Password</label>
-                <Link href="#" style={{ fontSize: 12, color: 'var(--accent-bright)' }}>Forgot password?</Link>
+                <Link href="/forgot-password" style={{ fontSize: 12, color: 'var(--accent-bright)' }}>Forgot password?</Link>
               </div>
               <div className="input-icon-wrap">
                 <input type={showPass ? 'text' : 'password'} className="input" value={password} onChange={e => setPassword(e.target.value)} placeholder="••••••••" required style={{ paddingRight: 44 }} />

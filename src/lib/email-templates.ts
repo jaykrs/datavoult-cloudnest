@@ -221,3 +221,17 @@ export function serverDetailsEmail(i: ServerDetailsInfo): Email {
     ),
   };
 }
+
+export function passwordResetEmail(name: string, url: string, minutes: number): Email {
+  return {
+    subject: 'Reset your DataVoult password',
+    text: `Hi ${name},\n\nWe received a request to reset your password. Use this link within ${minutes} minutes:\n${url}\n\nIf you did not ask for this, you can ignore this email — your password will not change.\n\n— DataVoult`,
+    html: layout(
+      'Reset your password',
+      p(`Hi ${escapeHtml(name)},`) +
+        p(`We received a request to reset your password. The link below works once and expires in ${minutes} minutes.`) +
+        p(`<a href="${escapeHtml(url)}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Reset password</a>`) +
+        p('If you did not ask for this, you can ignore this email — your password will not change.'),
+    ),
+  };
+}

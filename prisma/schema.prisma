@@ -26,6 +26,8 @@ model User {
   billingAddress   String?  @db.Text
   /// GST state code (e.g. "29") of the customer, used for CGST+SGST vs IGST.
   billingStateCode String?
+  /// Set when the password is reset; sessions issued before this are rejected.
+  passwordChangedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -36,6 +38,7 @@ model User {
   blogPosts     BlogPost[]
   deployments   Deployment[]
   sessions      Session[]
+  passwordResetTokens PasswordResetToken[]
   supportTickets SupportTicket[]
 
   @@map("users")
@@ -514,4 +517,19 @@ model Deployment {
   @@unique([subscriptionId, port])
   @@index([userId])
   @@map("deployments")
+}
+
+/// Single-use, expiring password-reset link. Only a SHA-256 hash of the token is stored.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
