@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import DashboardSidebar from '@/components/dashboard/Sidebar';
 import { User, Lock, Bell, Shield, Save } from 'lucide-react';
 
-interface UserData { id: string; name: string; email: string; role: string; createdAt: string; }
+interface UserData { id: string; name: string; email: string; role: string; createdAt: string; isVerified?: boolean; }
 
 export default function SettingsPage() {
   const [user,        setUser]        = useState<UserData | null>(null);
@@ -15,6 +15,16 @@ export default function SettingsPage() {
   const [profMsg,     setProfMsg]     = useState<{text:string;ok:boolean}|null>(null);
   const [pwdMsg,      setPwdMsg]      = useState<{text:string;ok:boolean}|null>(null);
   const [activeTab,   setActiveTab]   = useState('profile');
+  const [verifyMsg,   setVerifyMsg]   = useState<{text:string;ok:boolean}|null>(null);
+  const [sendingVerify, setSendingVerify] = useState(false);
+
+  async function resendVerification() {
+    setSendingVerify(true); setVerifyMsg(null);
+    const res = await fetch('/api/auth/resend-verification', { method: 'POST' });
+    const d = await res.json().catch(() => ({}));
+    setVerifyMsg(res.ok ? { text: d.data?.alreadyVerified ? 'Your email is already verified.' : 'Verification email sent — check your inbox.', ok: true } : { text: d.error || 'Could not send the email', ok: false });
+    setSendingVerify(false);
+  }
 
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
@@ -89,6 +99,15 @@ export default function SettingsPage() {
                       <label className="label">Email Address</label>
                       <input className="input" value={user?.email || ''} disabled />
                       <p style={{ fontSize: 12, color: 'var(--text-muted)', marginTop: 4 }}>Email cannot be changed. Contact support if needed.</p>
+                      <div style={{ marginTop: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+                        <span className={`badge badge-${user?.isVerified ? 'active' : 'pending'}`}>{user?.isVerified ? 'Verified' : 'Unverified'}</span>
+                        {user && !user.isVerified && (
+                          <button type="button" className="btn btn-secondary btn-sm" onClick={resendVerification} disabled={sendingVerify}>
+                            {sendingVerify ? 'Sending…' : 'Send verification email'}
+                          </button>
+                        )}
+                      </div>
+                      {verifyMsg && <p style={{ fontSize: 12, marginTop: 6, color: verifyMsg.ok ? 'var(--green)' : 'var(--red)' }}>{verifyMsg.text}</p>}
                     </div>
                     <div>
                       <label className="label">Member Since</label>

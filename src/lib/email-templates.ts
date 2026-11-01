@@ -260,3 +260,17 @@ export function conversationMessageEmail(c: ConversationMailInfo): Email {
     ),
   };
 }
+
+export function verifyEmailEmail(name: string, url: string, hours: number): Email {
+  return {
+    subject: 'Verify your DataVoult email',
+    text: `Hi ${name},\n\nPlease confirm your email address using this link (valid for ${hours} hours):\n${url}\n\nIf you did not create a DataVoult account, you can ignore this email.\n\n— DataVoult`,
+    html: layout(
+      'Verify your email',
+      p(`Hi ${escapeHtml(name)},`) +
+        p(`Please confirm your email address to finish setting up your account. The link works once and expires in ${hours} hours.`) +
+        p(`<a href="${escapeHtml(url)}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Verify email</a>`) +
+        p('If you did not create a DataVoult account, you can ignore this email.'),
+    ),
+  };
+}

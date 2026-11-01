@@ -5,7 +5,7 @@ import { signToken, createAuthResponse } from '@/lib/auth';
 import { apiError, registerSchema } from '@/lib/api';
 import { rateLimit, clientIp } from '@/lib/rate-limit';
 import { verifyRecaptcha, recaptchaErrorResponse } from '@/lib/recaptcha';
-import { notifyUserSignedUp } from '@/lib/notifications';
+import { notifyUserSignedUp, sendVerificationEmail } from '@/lib/notifications';
 import { z } from 'zod';
 
 export async function POST(req: NextRequest) {
@@ -31,6 +31,7 @@ export async function POST(req: NextRequest) {
     });
 
     await notifyUserSignedUp({ name: user.name, email: user.email });
+    await sendVerificationEmail({ id: user.id, name: user.name, email: user.email });
 
     const token = await signToken({ userId: user.id, email: user.email, role: user.role });
 

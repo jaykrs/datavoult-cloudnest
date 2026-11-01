@@ -5,6 +5,7 @@ import { formatINR } from './currency';
 import { decryptJson } from './crypto';
 import { isAwaitingApproval } from './gateway-approval';
 import { RESET_TTL_MINUTES } from './password-reset';
+import { VERIFY_TTL_HOURS, generateVerificationToken } from './email-verification';
 import { getSiteUrl } from './seo';
 import { sshCommand, sshPortOf, type StoredCredentials } from './server-details';
 
@@ -269,5 +270,24 @@ export async function notifyConversationMessage(conversationId: string, from: 'A
     })]);
   } catch (e) {
     console.error('[notify] conversation', (e as Error).message);
+  }
+}
+
+/**
+ * Create a verification link for the user and email it. Replaces any older unused link.
+ * Never throws; in development without mail configured the link is logged instead.
+ */
+export async function sendVerificationEmail(user: { id: string; name: string; email: string }): Promise<void> {
+  try {
+    const { token, tokenHash, expiresAt } = generateVerificationToken();
+    await prisma.$transaction([
+      prisma.emailVerificationToken.deleteMany({ where: { userId: user.id, usedAt: null } }),
+      prisma.emailVerificationToken.create({ data: { userId: user.id, tokenHash, expiresAt } }),
+    ]);
+    const url = `${getSiteUrl()}/verify-email?token=${token}`;
+    const sent = await sendMail({ to: user.email, ...tpl.verifyEmailEmail(user.name, url, VERIFY_TTL_HOURS) });
+    if (!sent && process.env.NODE_ENV !== 'production') console.info('[notify] mail not configured — dev verification link:', url);
+  } catch (e) {
+    console.error('[notify] verification email', (e as Error).message);
   }
 }
