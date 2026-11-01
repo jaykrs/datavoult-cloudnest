@@ -24,7 +24,7 @@ export async function POST(req: NextRequest) {
 
     await prisma.$transaction([
       // passwordChangedAt invalidates every session issued before now (see requireAuth).
-      prisma.user.update({ where: { id: record.userId }, data: { passwordHash, passwordChangedAt: now } }),
+      prisma.user.update({ where: { id: record.userId }, data: { passwordHash, passwordChangedAt: now, isVerified: true } }), // the emailed link proves the mailbox is theirs
       prisma.session.deleteMany({ where: { userId: record.userId } }),
       prisma.passwordResetToken.deleteMany({ where: { userId: record.userId, id: { not: record.id } } }),
     ]);

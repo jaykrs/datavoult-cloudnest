@@ -39,6 +39,7 @@ model User {
   deployments   Deployment[]
   sessions      Session[]
   passwordResetTokens PasswordResetToken[]
+  emailVerificationTokens EmailVerificationToken[]
   supportTickets SupportTicket[]
   conversations Conversation[]
 
@@ -579,4 +580,19 @@ model ConversationMessage {
 
   @@index([conversationId, createdAt])
   @@map("conversation_messages")
+}
+
+/// Single-use, expiring email-verification link. Only a SHA-256 hash of the token is stored.
+model EmailVerificationToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("email_verification_tokens")
 }
