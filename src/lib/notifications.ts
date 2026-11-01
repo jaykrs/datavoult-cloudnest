@@ -4,6 +4,8 @@ import * as tpl from './email-templates';
 import { formatINR } from './currency';
 import { decryptJson } from './crypto';
 import { isAwaitingApproval } from './gateway-approval';
+import { RESET_TTL_MINUTES } from './password-reset';
+import { getSiteUrl } from './seo';
 import { sshCommand, sshPortOf, type StoredCredentials } from './server-details';
 
 /** Longest we let email delay an HTTP response. The send keeps going afterwards. */
@@ -225,36 +227,13 @@ export async function notifyServerDetails(subscriptionId: string): Promise<boole
   }
 }
 
-/** Email the other side of a conversation about a new message. Never throws. */
-export async function notifyConversationMessage(conversationId: string, from: 'ADMIN' | 'USER'): Promise<void> {
+/** Email a password-reset link. Never throws; in development without mail configured the link is logged instead. */
+export async function notifyPasswordReset(user: { name: string; email: string }, token: string): Promise<void> {
   try {
-    const conv = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      include: { user: true, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
-    });
-    const msg = conv?.messages[0];
-    if (!conv || !msg) return;
-    const base = (process.env.APP_URL || '').replace(/\/$/, '');
-    if (from === 'ADMIN') {
-      await deliver([sendMail({
-        to: conv.user.email,
-        ...tpl.conversationMessageEmail({
-          recipientName: conv.user.name, senderName: 'The DataVoult team', subject: conv.subject, message: msg.body,
-          url: base ? `${base}/messages?c=${conv.id}` : undefined, toCustomer: true,
-        }),
-      })]);
-      return;
-    }
-    const admins = adminRecipients();
-    if (!admins.length) return;
-    await deliver([sendMail({
-      to: admins,
-      ...tpl.conversationMessageEmail({
-        recipientName: 'team', senderName: `${conv.user.name} <${conv.user.email}>`, subject: conv.subject, message: msg.body,
-        url: base ? `${base}/admin/conversations?c=${conv.id}` : undefined, toCustomer: false,
-      }),
-    })]);
+    const url = `${getSiteUrl()}/reset-password?token=${token}`;
+    const sent = await sendMail({ to: user.email, ...tpl.passwordResetEmail(user.name, url, RESET_TTL_MINUTES) });
+    if (!sent && process.env.NODE_ENV !== 'production') console.info('[notify] mail not configured — dev reset link:', url);
   } catch (e) {
-    console.error('[notify] conversation', (e as Error).message);
+    console.error('[notify] password reset', (e as Error).message);
   }
 }

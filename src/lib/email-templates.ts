@@ -222,27 +222,16 @@ export function serverDetailsEmail(i: ServerDetailsInfo): Email {
   };
 }
 
-export interface ConversationMailInfo {
-  recipientName: string;
-  senderName: string;
-  subject: string;
-  message: string;
-  url?: string;
-  /** True when the recipient is the customer (admin → customer). */
-  toCustomer: boolean;
-}
-
-export function conversationMessageEmail(c: ConversationMailInfo): Email {
-  const title = c.toCustomer ? `New message from DataVoult: ${c.subject}` : `Customer reply: ${c.subject}`;
+export function passwordResetEmail(name: string, url: string, minutes: number): Email {
   return {
-    subject: title,
-    text: `Hi ${c.recipientName},\n\n${c.senderName} wrote:\n\n${c.message}\n${c.url ? `\nReply here: ${c.url}\n` : ''}\n— DataVoult`,
+    subject: 'Reset your DataVoult password',
+    text: `Hi ${name},\n\nWe received a request to reset your password. Use this link within ${minutes} minutes:\n${url}\n\nIf you did not ask for this, you can ignore this email — your password will not change.\n\n— DataVoult`,
     html: layout(
-      c.toCustomer ? 'You have a new message' : 'New customer reply',
-      p(`Hi ${escapeHtml(c.recipientName)},`) +
-        p(`<b>${escapeHtml(c.senderName)}</b> wrote about <b>${escapeHtml(c.subject)}</b>:`) +
-        `<div style="white-space:pre-wrap;line-height:1.5;border-left:3px solid #e4e4e7;padding-left:12px;margin:0 0 12px">${escapeHtml(c.message)}</div>` +
-        (c.url ? p(`<a href="${escapeHtml(c.url)}">Open the conversation</a>`) : ''),
+      'Reset your password',
+      p(`Hi ${escapeHtml(name)},`) +
+        p(`We received a request to reset your password. The link below works once and expires in ${minutes} minutes.`) +
+        p(`<a href="${escapeHtml(url)}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 18px;border-radius:6px;text-decoration:none">Reset password</a>`) +
+        p('If you did not ask for this, you can ignore this email — your password will not change.'),
     ),
   };
 }

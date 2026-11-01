@@ -26,6 +26,8 @@ model User {
   billingAddress   String?  @db.Text
   /// GST state code (e.g. "29") of the customer, used for CGST+SGST vs IGST.
   billingStateCode String?
+  /// Set when the password is reset; sessions issued before this are rejected.
+  passwordChangedAt DateTime?
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
@@ -36,6 +38,7 @@ model User {
   blogPosts     BlogPost[]
   deployments   Deployment[]
   sessions      Session[]
+  passwordResetTokens PasswordResetToken[]
   supportTickets SupportTicket[]
   conversations Conversation[]
 
@@ -517,48 +520,17 @@ model Deployment {
   @@map("deployments")
 }
 
-enum ConversationStatus {
-  OPEN
-  CLOSED
-}
+/// Single-use, expiring password-reset link. Only a SHA-256 hash of the token is stored.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
 
-enum ConversationSender {
-  ADMIN
-  USER
-}
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-/// A message thread between the admin team and one customer (started by an admin, the customer can reply).
-model Conversation {
-  id            String             @id @default(cuid())
-  userId        String
-  subject       String
-  status        ConversationStatus @default(OPEN)
-  /// True while the customer has unread admin messages.
-  userUnread    Boolean            @default(true)
-  /// True while an admin has an unread customer reply.
-  adminUnread   Boolean            @default(false)
-  lastMessageAt DateTime           @default(now())
-  createdAt     DateTime           @default(now())
-  updatedAt     DateTime           @updatedAt
-
-  user     User                  @relation(fields: [userId], references: [id])
-  messages ConversationMessage[]
-
-  @@index([userId, lastMessageAt])
-  @@index([status, lastMessageAt])
-  @@map("conversations")
-}
-
-model ConversationMessage {
-  id             String             @id @default(cuid())
-  conversationId String
-  senderId       String
-  senderRole     ConversationSender
-  body           String             @db.Text
-  createdAt      DateTime           @default(now())
-
-  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
-
-  @@index([conversationId, createdAt])
-  @@map("conversation_messages")
+  @@index([userId])
+  @@map("password_reset_tokens")
 }
