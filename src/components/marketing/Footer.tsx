@@ -12,6 +12,7 @@ export default function Footer() {
           <Link href="/pricing" style={link}>Pricing</Link>
           <Link href="/docs" style={link}>Docs</Link>
           <Link href="/blog" style={link}>Blog</Link>
+          <Link href="/about" style={link}>About</Link>
           <Link href="/contact" style={link}>Contact</Link>
           <Link href="/privacy" style={link}>Privacy Policy</Link>
           <button type="button" onClick={() => window.dispatchEvent(new Event('dv-cookie-settings'))} style={{ ...link, background: 'none', border: 0, padding: 0, cursor: 'pointer' }}>

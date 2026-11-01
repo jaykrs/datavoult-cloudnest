@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 
-const PUBLIC_PREFIXES = ['/login', '/register', '/products', '/pricing', '/privacy', '/contact', '/blog'];
+const PUBLIC_PREFIXES = ['/login', '/register', '/products', '/pricing', '/privacy', '/about', '/contact', '/blog'];
 const isPublicPath = (p: string) => p === '/' || PUBLIC_PREFIXES.some((x) => p === x || p.startsWith(`${x}/`));
 
 /**
