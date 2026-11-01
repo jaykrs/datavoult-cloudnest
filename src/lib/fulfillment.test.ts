@@ -72,6 +72,8 @@ describe('fulfillPayment — new subscription', () => {
     expect(payArgs).toMatchObject({
       userId: 'user_1', subscriptionId: 'sub_new', status: 'COMPLETED', method: 'UPI', gatewayId: 'pay_1', currency: 'INR',
     });
+    // Online payments are recorded as awaiting the admin's approval.
+    expect(payArgs.gatewayData).toMatchObject({ gateway: 'razorpay', approval: { status: 'PENDING' } });
     // Default: the order waits for an admin to confirm and provision it.
     expect(runProvisioning).not.toHaveBeenCalled();
   });

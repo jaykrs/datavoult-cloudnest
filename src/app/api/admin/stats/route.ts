@@ -15,6 +15,7 @@ export async function GET() {
       subsByCategory,
       awaitingRows,
       awaitingCount,
+      approvalCount,
     ] = await Promise.all([
       prisma.user.count(),
       prisma.payment.aggregate({ where: { status: 'COMPLETED' }, _sum: { amount: true } }),
@@ -32,7 +33,7 @@ export async function GET() {
       }),
       // Paid, but no server handed over yet — the admin's to-do list.
       prisma.subscription.findMany({
-        where: { status: 'PENDING', payments: { some: { status: 'COMPLETED' } } },
+        where: { status: 'PENDING', payments: { some: { status: 'COMPLETED' }, none: { gatewayData: { path: '$.approval.status', equals: 'PENDING' } } } },
         orderBy: { createdAt: 'asc' },
         take: 20,
         include: {
@@ -40,7 +41,8 @@ export async function GET() {
           payments: { where: { status: 'COMPLETED' }, orderBy: { createdAt: 'desc' }, take: 1, select: { amount: true, method: true, gatewayData: true, createdAt: true } },
         },
       }),
-      prisma.subscription.count({ where: { status: 'PENDING', payments: { some: { status: 'COMPLETED' } } } }),
+      prisma.subscription.count({ where: { status: 'PENDING', payments: { some: { status: 'COMPLETED' }, none: { gatewayData: { path: '$.approval.status', equals: 'PENDING' } } } } }),
+      prisma.payment.count({ where: { gatewayData: { path: '$.approval.status', equals: 'PENDING' } } }),
     ]);
 
     // Revenue by month (last 6 months)
@@ -79,6 +81,7 @@ export async function GET() {
       totalRevenue: Number(totalRevenue._sum.amount || 0),
       activeSubscriptions,
       totalProducts,
+      awaitingApprovalCount: approvalCount,
       awaitingProvisioningCount: awaitingCount,
       awaitingProvisioning: awaitingRows.map((s) => ({
         id: s.id, customer: s.user.name, email: s.user.email, product: s.product.name, plan: s.plan.name,

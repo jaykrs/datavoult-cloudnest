@@ -5,6 +5,7 @@ import { requireAdmin } from '@/lib/auth';
 import { decryptJson, encryptJson } from '@/lib/crypto';
 import { serverDetailsSchema, mergeCredentials, authType, sshPortOf, type StoredCredentials } from '@/lib/server-details';
 import { notifyServerDetails } from '@/lib/notifications';
+import { isAwaitingApproval } from '@/lib/gateway-approval';
 import { z } from 'zod';
 
 interface Params { params: { id: string } }
@@ -63,6 +64,16 @@ export async function POST(req: NextRequest, { params }: Params) {
     if (!sub) return apiError('Subscription not found', 404);
     if (!['PENDING', 'ACTIVE', 'SUSPENDED'].includes(sub.status)) {
       return apiError(`Server details cannot be changed for a ${sub.status.toLowerCase()} subscription`, 409);
+    }
+
+    if (sub.status === 'PENDING') {
+      const unapproved = await prisma.payment.findFirst({
+        where: { subscriptionId: sub.id, gatewayData: { path: '$.approval.status', equals: 'PENDING' } },
+        select: { gatewayData: true },
+      });
+      if (unapproved && isAwaitingApproval(unapproved.gatewayData)) {
+        return apiError('Approve the online payment first (Admin → Payments), then provision the server', 409);
+      }
     }
 
     const existing = readStored(sub.serviceConfig?.credentials);

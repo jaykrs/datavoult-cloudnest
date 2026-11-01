@@ -7,6 +7,7 @@ import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pi
 interface User { name: string; email: string; role: string; }
 interface Stats {
   totalUsers: number; totalRevenue: number; activeSubscriptions: number; totalProducts: number;
+  awaitingApprovalCount: number;
   awaitingProvisioningCount: number;
   awaitingProvisioning: { id: string; customer: string; email: string; product: string; plan: string; amount: number; paidVia: string; paidAt: string }[];
   recentPayments: { id: string; amount: number; status: string; createdAt: string; user: { name: string; email: string }; subscription?: { product: { name: string }; plan: { name: string } } }[];
@@ -128,6 +129,16 @@ export default function AdminDashboard() {
                   )}
                 </div>
               </div>
+
+              {stats && stats.awaitingApprovalCount > 0 && (
+                <div className="card" style={{ marginBottom: 24, borderColor: 'var(--amber)', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                  <div>
+                    <div style={{ fontWeight: 600 }}>{stats.awaitingApprovalCount} online payment{stats.awaitingApprovalCount === 1 ? '' : 's'} awaiting your approval</div>
+                    <div style={{ fontSize: 13, color: 'var(--text-muted)' }}>Approve the payment first, then provision the server.</div>
+                  </div>
+                  <a href="/admin/payments?approval=pending" className="btn btn-primary btn-sm">Review payments</a>
+                </div>
+              )}
 
               {/* Paid orders waiting for the admin to hand over a server */}
               {stats && stats.awaitingProvisioningCount > 0 && (

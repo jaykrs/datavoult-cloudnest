@@ -1,5 +1,6 @@
 'use client';
 import { paymentMethodLabel } from '@/lib/payment-labels';
+import { CATEGORY_LABELS, type PaymentCategory } from '@/lib/gateway-approval';
 import { useEffect, useState } from 'react';
 import AdminSidebar from '@/components/admin/AdminSidebar';
 import Pagination from '@/components/ui/Pagination';
@@ -11,6 +12,7 @@ interface AdminPayment {
   user: { name: string; email: string };
   subscription?: { product: { name: string }; plan: { name: string } };
   invoice?: { number: string } | null;
+  category: PaymentCategory; awaitingApproval: boolean; gatewayRef: string | null;
 }
 
 const statusIcon: Record<string, React.ReactNode> = {
@@ -30,10 +32,16 @@ export default function AdminPaymentsPage() {
   const [total,        setTotal]        = useState(0);
   const [summary,      setSummary]      = useState({ revenue: 0, count: 0, success: 0, failed: 0 });
 
+  const [pendingApproval, setPendingApproval] = useState(0);
+  const [reload, setReload] = useState(0);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [error, setError] = useState('');
+
   useEffect(() => {
     const stored = localStorage.getItem('dv_user');
     if (stored) try { setUser(JSON.parse(stored)); } catch {}
-    // fetch summary from stats
+    const f = new URLSearchParams(window.location.search).get('approval');
+    if (f === 'pending') setStatusFilter('APPROVAL');
     fetch('/api/admin/stats').then(r => r.json()).then(d => {
       const all: AdminPayment[] = d.data?.recentPayments || [];
       setSummary({
@@ -47,17 +55,22 @@ export default function AdminPaymentsPage() {
 
   useEffect(() => {
     setLoading(true);
-    const statusQ = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
-    // use admin stats endpoint for data (reusing what we have)
-    fetch('/api/admin/stats').then(r => r.json()).then(d => {
-      let all: AdminPayment[] = d.data?.recentPayments || [];
-      if (statusFilter !== 'all') all = all.filter((p: AdminPayment) => p.status === statusFilter);
-      setTotal(all.length);
-      const start = (page - 1) * LIMIT;
-      setPayments(all.slice(start, start + LIMIT));
+    const q = statusFilter === 'APPROVAL' ? '&approval=pending' : statusFilter !== 'all' ? `&status=${statusFilter}` : '';
+    fetch(`/api/admin/payments?limit=${LIMIT}&page=${page}${q}`).then(r => r.json()).then(d => {
+      setPayments(d.data?.payments || []);
+      setTotal(d.data?.meta?.total ?? 0);
+      setPendingApproval(d.data?.pendingApproval ?? 0);
       setLoading(false);
-    });
-  }, [statusFilter, page]);
+    }).catch(() => setLoading(false));
+  }, [statusFilter, page, reload]);
+
+  async function approve(id: string) {
+    if (!confirm('Confirm you have checked this payment in the Razorpay dashboard? After approving you can provision the server.')) return;
+    setBusyId(id); setError('');
+    const res = await fetch(`/api/admin/payments/${id}/approve`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{}' });
+    if (!res.ok) { const d = await res.json().catch(() => ({})); setError(d.error || 'Could not approve'); }
+    setBusyId(null); setReload(n => n + 1);
+  }
 
   const totalPages = Math.ceil(total / LIMIT);
 
@@ -91,24 +104,25 @@ export default function AdminPaymentsPage() {
           </div>
 
           <div className="filter-bar">
-            {['all','COMPLETED','PENDING','FAILED','REFUNDED'].map(s => (
+            {['all','APPROVAL','COMPLETED','PENDING','FAILED','REFUNDED'].map(s => (
               <button key={s} onClick={() => { setStatusFilter(s); setPage(1); }}
                 className={`btn btn-sm${statusFilter === s ? ' btn-primary' : ' btn-secondary'}`}>
-                {s === 'all' ? 'All' : s}
+                {s === 'all' ? 'All' : s === 'APPROVAL' ? `Needs approval${pendingApproval ? ` (${pendingApproval})` : ''}` : s}
               </button>
             ))}
           </div>
 
+          {error && <div style={{ color: 'var(--red)', fontSize: 13, marginBottom: 12 }}>{error}</div>}
           <div className="table-wrap">
             <table className="data-table">
               <thead>
-                <tr><th>Transaction</th><th>User</th><th>Service</th><th>Amount</th><th>Method</th><th>Status</th><th>Date</th><th>Invoice</th></tr>
+                <tr><th>Transaction</th><th>User</th><th>Service</th><th>Amount</th><th>Category</th><th>Status</th><th>Date</th><th>Invoice</th><th></th></tr>
               </thead>
               <tbody>
                 {loading ? (
-                  <tr><td colSpan={8} style={{ padding: 48, textAlign: 'center' }}><span className="spinner" style={{ width: 28, height: 28, display: 'inline-block' }} /></td></tr>
+                  <tr><td colSpan={9} style={{ padding: 48, textAlign: 'center' }}><span className="spinner" style={{ width: 28, height: 28, display: 'inline-block' }} /></td></tr>
                 ) : payments.length === 0 ? (
-                  <tr><td colSpan={8} style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No payments found</td></tr>
+                  <tr><td colSpan={9} style={{ padding: 48, textAlign: 'center', color: 'var(--text-muted)', fontSize: 14 }}>No payments found</td></tr>
                 ) : payments.map((p, i) => (
                   <tr key={p.id}>
                     <td style={{ fontSize: 11, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)' }}>
@@ -130,7 +144,10 @@ export default function AdminPaymentsPage() {
                       </div>
                       <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.currency}</div>
                     </td>
-                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>{paymentMethodLabel(p.method)}</td>
+                    <td style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <div style={{ fontWeight: 600 }}>{CATEGORY_LABELS[p.category]}</div>
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{p.category === 'PAYMENT_GATEWAY' ? `Razorpay · ${paymentMethodLabel(p.method)}` : ''}</div>
+                    </td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {statusIcon[p.status]}
@@ -146,6 +163,13 @@ export default function AdminPaymentsPage() {
                       {p.status === 'COMPLETED' ? (
                         <a href={`/invoices/${p.id}`} target="_blank" rel="noreferrer" style={{ color: 'var(--accent-bright)', fontFamily: 'var(--font-mono)' }}>{p.invoice?.number ?? 'Generate'}</a>
                       ) : '—'}
+                    </td>
+                    <td>
+                      {p.awaitingApproval ? (
+                        <button type="button" className="btn btn-primary btn-sm" disabled={busyId === p.id} onClick={() => approve(p.id)}>
+                          {busyId === p.id ? <span className="spinner" style={{ width: 12, height: 12 }} /> : 'Approve'}
+                        </button>
+                      ) : p.category === 'PAYMENT_GATEWAY' && p.status === 'COMPLETED' ? <span className="badge badge-active" style={{ fontSize: 11 }}>Approved</span> : null}
                     </td>
                   </tr>
                 ))}

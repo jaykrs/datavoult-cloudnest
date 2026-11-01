@@ -47,6 +47,8 @@ export interface OrderInfo {
   paymentMethod?: string;
   /** Admin link to the subscription to provision it. */
   provisionUrl?: string;
+  /** Online payment still needs the admin's approval before provisioning. */
+  needsApproval?: boolean;
 }
 
 export function orderConfirmationEmail(o: OrderInfo): Email {
@@ -64,14 +66,14 @@ export function orderConfirmationEmail(o: OrderInfo): Email {
 
 export function adminNewOrderEmail(o: OrderInfo): Email {
   return {
-    subject: `Payment received — provision ${o.productName}`,
-    text: `Payment received — action needed: provision the server\nCustomer: ${o.userName} <${o.userEmail}>\nProduct: ${o.productName} (${o.planName})\nAmount: ${o.amount}${o.paymentMethod ? `\nPaid via: ${o.paymentMethod}` : ''}\nReference: ${o.subscriptionId}${o.provisionUrl ? `\nProvision: ${o.provisionUrl}` : ''}`,
+    subject: o.needsApproval ? `Online payment received — approve, then provision ${o.productName}` : `Payment received — provision ${o.productName}`,
+    text: `${o.needsApproval ? 'Online payment received — action needed: approve the payment, then provision the server' : 'Payment received — action needed: provision the server'}\nCustomer: ${o.userName} <${o.userEmail}>\nProduct: ${o.productName} (${o.planName})\nAmount: ${o.amount}${o.paymentMethod ? `\nPaid via: ${o.paymentMethod}` : ''}\nReference: ${o.subscriptionId}${o.provisionUrl ? `\nProvision: ${o.provisionUrl}` : ''}`,
     html: layout(
-      'Payment received — provision the service',
+      o.needsApproval ? 'Online payment received — approve it, then provision' : 'Payment received — provision the service',
       p(`<b>Customer:</b> ${escapeHtml(o.userName)} &lt;${escapeHtml(o.userEmail)}&gt;`) +
         p(`<b>Product:</b> ${escapeHtml(o.productName)} (${escapeHtml(o.planName)})`) +
         p(`<b>Amount:</b> ${escapeHtml(o.amount)}${o.paymentMethod ? `<br><b>Paid via:</b> ${escapeHtml(o.paymentMethod)}` : ''}<br><b>Reference:</b> ${escapeHtml(o.subscriptionId)}`) +
-        (o.provisionUrl ? p(`<a href="${escapeHtml(o.provisionUrl)}">Open in admin to provision the server</a>`) : ''),
+        (o.provisionUrl ? p(`<a href="${escapeHtml(o.provisionUrl)}">${o.needsApproval ? 'Open in admin to approve the payment' : 'Open in admin to provision the server'}</a>`) : ''),
     ),
   };
 }
