@@ -224,3 +224,37 @@ export async function notifyServerDetails(subscriptionId: string): Promise<boole
     return false;
   }
 }
+
+/** Email the other side of a conversation about a new message. Never throws. */
+export async function notifyConversationMessage(conversationId: string, from: 'ADMIN' | 'USER'): Promise<void> {
+  try {
+    const conv = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: { user: true, messages: { orderBy: { createdAt: 'desc' }, take: 1 } },
+    });
+    const msg = conv?.messages[0];
+    if (!conv || !msg) return;
+    const base = (process.env.APP_URL || '').replace(/\/$/, '');
+    if (from === 'ADMIN') {
+      await deliver([sendMail({
+        to: conv.user.email,
+        ...tpl.conversationMessageEmail({
+          recipientName: conv.user.name, senderName: 'The DataVoult team', subject: conv.subject, message: msg.body,
+          url: base ? `${base}/messages?c=${conv.id}` : undefined, toCustomer: true,
+        }),
+      })]);
+      return;
+    }
+    const admins = adminRecipients();
+    if (!admins.length) return;
+    await deliver([sendMail({
+      to: admins,
+      ...tpl.conversationMessageEmail({
+        recipientName: 'team', senderName: `${conv.user.name} <${conv.user.email}>`, subject: conv.subject, message: msg.body,
+        url: base ? `${base}/admin/conversations?c=${conv.id}` : undefined, toCustomer: false,
+      }),
+    })]);
+  } catch (e) {
+    console.error('[notify] conversation', (e as Error).message);
+  }
+}

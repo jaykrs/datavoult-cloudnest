@@ -221,3 +221,28 @@ export function serverDetailsEmail(i: ServerDetailsInfo): Email {
     ),
   };
 }
+
+export interface ConversationMailInfo {
+  recipientName: string;
+  senderName: string;
+  subject: string;
+  message: string;
+  url?: string;
+  /** True when the recipient is the customer (admin → customer). */
+  toCustomer: boolean;
+}
+
+export function conversationMessageEmail(c: ConversationMailInfo): Email {
+  const title = c.toCustomer ? `New message from DataVoult: ${c.subject}` : `Customer reply: ${c.subject}`;
+  return {
+    subject: title,
+    text: `Hi ${c.recipientName},\n\n${c.senderName} wrote:\n\n${c.message}\n${c.url ? `\nReply here: ${c.url}\n` : ''}\n— DataVoult`,
+    html: layout(
+      c.toCustomer ? 'You have a new message' : 'New customer reply',
+      p(`Hi ${escapeHtml(c.recipientName)},`) +
+        p(`<b>${escapeHtml(c.senderName)}</b> wrote about <b>${escapeHtml(c.subject)}</b>:`) +
+        `<div style="white-space:pre-wrap;line-height:1.5;border-left:3px solid #e4e4e7;padding-left:12px;margin:0 0 12px">${escapeHtml(c.message)}</div>` +
+        (c.url ? p(`<a href="${escapeHtml(c.url)}">Open the conversation</a>`) : ''),
+    ),
+  };
+}
