@@ -4,7 +4,8 @@ import Navbar from '@/components/marketing/Navbar';
 import Footer from '@/components/marketing/Footer';
 import Recaptcha, { RECAPTCHA_SITE_KEY, type RecaptchaHandle } from '@/components/ui/Recaptcha';
 import { trackEvent } from '@/lib/analytics';
-import { Send, CheckCircle } from 'lucide-react';
+import { COMPANY } from '@/lib/company';
+import { Send, CheckCircle, MapPin, Mail, Phone } from 'lucide-react';
 
 export default function ContactPage() {
   const [form, setForm] = useState({ name: '', email: '', subject: '', message: '', website: '' });
@@ -40,6 +41,12 @@ export default function ContactPage() {
       <main className="container" style={{ maxWidth: 620, padding: '56px 24px' }}>
         <h1 style={{ fontSize: 34, fontWeight: 700, marginBottom: 6 }}>Contact us</h1>
         <p style={{ color: 'var(--text-secondary)', marginBottom: 28 }}>Questions about plans, billing or your services? Send us a message and we&apos;ll reply by email.</p>
+
+        <div className="card" style={{ padding: 20, marginBottom: 24, display: 'flex', flexDirection: 'column', gap: 10, fontSize: 14 }}>
+          <div style={{ display: 'flex', gap: 10 }}><MapPin size={17} style={{ flexShrink: 0, marginTop: 2 }} /><span>{COMPANY.name}, {COMPANY.addressLines.join(', ')}</span></div>
+          <div style={{ display: 'flex', gap: 10 }}><Phone size={17} style={{ flexShrink: 0, marginTop: 2 }} /><a href={`tel:${COMPANY.phoneHref}`}>{COMPANY.phoneDisplay}</a></div>
+          <div style={{ display: 'flex', gap: 10 }}><Mail size={17} style={{ flexShrink: 0, marginTop: 2 }} /><a href={`mailto:${COMPANY.email}`}>{COMPANY.email}</a></div>
+        </div>
 
         {sent ? (
           <div className="auth-box" style={{ textAlign: 'center', padding: 40 }}>

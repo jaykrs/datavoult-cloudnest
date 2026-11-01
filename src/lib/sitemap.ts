@@ -12,6 +12,7 @@ const STATIC_PAGES: Array<{ path: string; priority: number; changeFrequency: Sit
   { path: '/pricing', priority: 0.8, changeFrequency: 'weekly' },
   { path: '/blog', priority: 0.8, changeFrequency: 'daily' },
   { path: '/docs', priority: 0.7, changeFrequency: 'monthly' },
+  { path: '/about', priority: 0.5, changeFrequency: 'monthly' },
   { path: '/contact', priority: 0.4, changeFrequency: 'monthly' },
   { path: '/privacy', priority: 0.2, changeFrequency: 'monthly' },
 ];
